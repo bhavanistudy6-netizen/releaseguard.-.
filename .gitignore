@@ -1,0 +1,18 @@
+# Java build output
+**/target/
+
+# Frontend dependencies and build output
+**/node_modules/
+**/dist/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Editor settings
+.idea/
+.vscode/
+
+# Logs
+*.log
