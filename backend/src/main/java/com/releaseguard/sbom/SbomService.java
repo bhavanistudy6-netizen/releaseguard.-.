@@ -14,6 +14,10 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+
 @Service
 public class SbomService {
 
@@ -148,5 +152,50 @@ public class SbomService {
         return new ResponseStatusException(
                 HttpStatus.CONFLICT,
                 "An SBOM already exists for this release");
+    }
+
+    @Transactional(readOnly = true)
+    public SbomComponentPageResponse listComponents(
+            Long applicationId,
+            Long releaseId,
+            int page,
+            int size) {
+
+        if (page < 0 || size < 1 || size > 100) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Page must be at least 0 and size must be between 1 and 100");
+        }
+
+        releaseRepository
+                .findByIdAndApplication_Id(releaseId, applicationId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Release not found for this application"));
+
+        SbomDocument document = documentRepository
+                .findByRelease_Id(releaseId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "No SBOM has been uploaded for this release"));
+
+        PageRequest pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.ASC, "id"));
+
+        Page<SbomComponent> components = componentRepository.findBySbomDocument_Id(
+                document.getId(),
+                pageable);
+
+        return new SbomComponentPageResponse(
+                components.getContent()
+                        .stream()
+                        .map(SbomComponentResponse::from)
+                        .toList(),
+                components.getNumber(),
+                components.getSize(),
+                components.getTotalElements(),
+                components.getTotalPages());
     }
 }

@@ -69,4 +69,18 @@ public class SbomController {
                 HttpStatus.PAYLOAD_TOO_LARGE,
                 "SBOM file must not exceed 10 MiB");
     }
+
+    @GetMapping("/components")
+    public SbomComponentPageResponse listComponents(
+            @PathVariable Long applicationId,
+            @PathVariable Long releaseId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        return sbomService.listComponents(
+                applicationId,
+                releaseId,
+                page,
+                size);
+    }
 }
