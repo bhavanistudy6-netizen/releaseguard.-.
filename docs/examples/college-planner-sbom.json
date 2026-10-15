@@ -1,0 +1,23 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "components": [
+    {
+      "bom-ref": "commons-lang3",
+      "type": "library",
+      "group": "org.apache.commons",
+      "name": "commons-lang3",
+      "version": "3.17.0",
+      "purl": "pkg:maven/org.apache.commons/commons-lang3@3.17.0"
+    },
+    {
+      "bom-ref": "example-library",
+      "type": "library",
+      "group": "org.example",
+      "name": "example-library",
+      "version": "1.0.0",
+      "purl": "pkg:maven/org.example/example-library@1.0.0"
+    }
+  ]
+}
