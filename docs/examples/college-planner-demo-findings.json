@@ -1,0 +1,17 @@
+{
+    "sbomSha256":  "d434d5e7b86de32b75be1fd0ec6a749a706ada9c6c8a79ee8a68850e87f323d9",
+    "scannerVersion":  "1.0.0",
+    "scannerName":  "DemoScanner",
+    "findings":  [
+                     {
+                         "description":  "Synthetic finding for ReleaseGuard testing",
+                         "source":  "demo",
+                         "componentBomRef":  "commons-lang3",
+                         "fixedVersion":  "3.18.0",
+                         "severity":  "HIGH",
+                         "vulnerabilityId":  "DEMO-001"
+                     }
+                 ],
+    "scannedAt":  "2026-10-18T06:03:47.8023147+00:00",
+    "formatVersion":  "1"
+}
