@@ -70,6 +70,14 @@ public class SbomController {
                 "SBOM file must not exceed 10 MiB");
     }
 
+    @GetMapping
+    public SbomUploadResponse getSbom(
+            @PathVariable Long applicationId,
+            @PathVariable Long releaseId) {
+
+        return sbomService.getSbom(applicationId, releaseId);
+    }
+
     @GetMapping("/components")
     public SbomComponentPageResponse listComponents(
             @PathVariable Long applicationId,

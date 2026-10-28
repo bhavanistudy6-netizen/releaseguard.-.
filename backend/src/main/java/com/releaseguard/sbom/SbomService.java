@@ -155,6 +155,33 @@ public class SbomService {
     }
 
     @Transactional(readOnly = true)
+    public SbomUploadResponse getSbom(Long applicationId, Long releaseId) {
+        releaseRepository
+                .findByIdAndApplication_Id(releaseId, applicationId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Release not found for this application"));
+
+        SbomDocument document = documentRepository
+                .findByRelease_Id(releaseId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "No SBOM has been uploaded for this release"));
+
+        int componentCount = (int) componentRepository.countBySbomDocument_Id(document.getId());
+
+        return new SbomUploadResponse(
+                document.getId(),
+                releaseId,
+                document.getOriginalFilename(),
+                document.getBomFormat(),
+                document.getSpecVersion(),
+                document.getDocumentSha256(),
+                componentCount,
+                document.getUploadedAt());
+    }
+
+    @Transactional(readOnly = true)
     public SbomComponentPageResponse listComponents(
             Long applicationId,
             Long releaseId,

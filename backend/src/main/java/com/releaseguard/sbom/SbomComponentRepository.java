@@ -7,12 +7,14 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 public interface SbomComponentRepository
-                extends JpaRepository<SbomComponent, Long> {
+        extends JpaRepository<SbomComponent, Long> {
 
-        Page<SbomComponent> findBySbomDocument_Id(
-                        Long sbomDocumentId,
-                        Pageable pageable);
+    Page<SbomComponent> findBySbomDocument_Id(
+            Long sbomDocumentId,
+            Pageable pageable);
 
-        List<SbomComponent> findAllBySbomDocument_IdOrderByIdAsc(
-                        Long sbomDocumentId);
+    long countBySbomDocument_Id(Long sbomDocumentId);
+
+    List<SbomComponent> findAllBySbomDocument_IdOrderByIdAsc(
+            Long sbomDocumentId);
 }
