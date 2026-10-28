@@ -103,49 +103,47 @@ class DeploymentPersistenceTest {
         assertNotNull(second.recordedAt());
     }
 
-    @Test
+        @Test
     void keepsEnvironmentPointersSeparate() {
         Fixture fixture = createApplication();
 
         var staging = deploymentService.record(
                 fixture.applicationId(),
-                request(fixture.firstReleaseId(), DeploymentEnvironment.STAGING)
-        );
+                request(
+                        fixture.firstReleaseId(),
+                        DeploymentEnvironment.STAGING));
 
-        var production = deploymentService.record(
+        var development = deploymentService.record(
                 fixture.applicationId(),
                 request(
                         fixture.secondReleaseId(),
-                        DeploymentEnvironment.PRODUCTION
-                )
-        );
+                        DeploymentEnvironment.DEVELOPMENT));
 
         var stagingPointer = currentRepository.findById(
                 new CurrentDeploymentId(
                         fixture.applicationId(),
-                        DeploymentEnvironment.STAGING
-                )
-        ).orElseThrow();
+                        DeploymentEnvironment.STAGING))
+                .orElseThrow();
 
-        var productionPointer = currentRepository.findById(
+        var developmentPointer = currentRepository.findById(
                 new CurrentDeploymentId(
                         fixture.applicationId(),
-                        DeploymentEnvironment.PRODUCTION
-                )
-        ).orElseThrow();
+                        DeploymentEnvironment.DEVELOPMENT))
+                .orElseThrow();
 
-        assertEquals(staging.id(), stagingPointer.getDeployment().getId());
         assertEquals(
-                production.id(),
-                productionPointer.getDeployment().getId()
-        );
+                staging.id(),
+                stagingPointer.getDeployment().getId());
+
+        assertEquals(
+                development.id(),
+                developmentPointer.getDeployment().getId());
 
         assertEquals(
                 2,
                 currentRepository
                         .findById_ApplicationId(fixture.applicationId())
-                        .size()
-        );
+                        .size());
     }
 
     @Test

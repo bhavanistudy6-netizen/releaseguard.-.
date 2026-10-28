@@ -1,22 +1,9 @@
 package com.releaseguard.release;
 
-import java.time.Instant;
-
 import com.releaseguard.application.Application;
+import jakarta.persistence.*;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
+import java.time.Instant;
 
 @Entity
 @Table(name = "releases")
@@ -46,6 +33,10 @@ public class Release {
     @Column(nullable = false, length = 30)
     private ReleaseStatus status = ReleaseStatus.DRAFT;
 
+    @Version
+    @Column(name = "lock_version", nullable = false)
+    private Long lockVersion;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -53,7 +44,6 @@ public class Release {
     private Instant updatedAt;
 
     protected Release() {
-        // Required by JPA.
     }
 
     public Release(
@@ -67,6 +57,43 @@ public class Release {
         this.gitCommitSha = gitCommitSha;
         this.dockerImage = dockerImage;
         this.imageDigest = imageDigest;
+    }
+
+    public void submitForReview() {
+        requireStatus(ReleaseStatus.DRAFT);
+        status = ReleaseStatus.READY_FOR_REVIEW;
+    }
+
+    public void approve() {
+        requireStatus(ReleaseStatus.READY_FOR_REVIEW);
+        status = ReleaseStatus.APPROVED;
+    }
+
+    public void reject() {
+        requireStatus(ReleaseStatus.READY_FOR_REVIEW);
+        status = ReleaseStatus.DRAFT;
+    }
+
+    public void revokeApproval() {
+        requireStatus(ReleaseStatus.APPROVED);
+        status = ReleaseStatus.DRAFT;
+    }
+
+    public void retire() {
+        if (status == ReleaseStatus.RETIRED) {
+            throw new IllegalStateException("Release is already retired");
+        }
+
+        status = ReleaseStatus.RETIRED;
+    }
+
+    private void requireStatus(ReleaseStatus expected) {
+        if (status != expected) {
+            throw new IllegalStateException(
+                    "Expected release status " + expected
+                            + " but found " + status
+            );
+        }
     }
 
     @PrePersist
@@ -107,6 +134,10 @@ public class Release {
 
     public ReleaseStatus getStatus() {
         return status;
+    }
+
+    public Long getLockVersion() {
+        return lockVersion;
     }
 
     public Instant getCreatedAt() {
