@@ -10,134 +10,142 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import com.releaseguard.approval.ProductionDeploymentPolicy;
 
 @Service
 @Validated
 public class DeploymentService {
 
-    private final ApplicationRepository applicationRepository;
-    private final ReleaseRepository releaseRepository;
-    private final DeploymentRepository deploymentRepository;
-    private final CurrentDeploymentRepository currentRepository;
+        private final ApplicationRepository applicationRepository;
+        private final ReleaseRepository releaseRepository;
+        private final DeploymentRepository deploymentRepository;
+        private final CurrentDeploymentRepository currentRepository;
+        private final ProductionDeploymentPolicy productionPolicy;
 
-    public DeploymentService(
-            ApplicationRepository applicationRepository,
-            ReleaseRepository releaseRepository,
-            DeploymentRepository deploymentRepository,
-            CurrentDeploymentRepository currentRepository) {
-        this.applicationRepository = applicationRepository;
-        this.releaseRepository = releaseRepository;
-        this.deploymentRepository = deploymentRepository;
-        this.currentRepository = currentRepository;
-    }
+        public DeploymentService(
+                        ApplicationRepository applicationRepository,
+                        ReleaseRepository releaseRepository,
+                        DeploymentRepository deploymentRepository,
+                        CurrentDeploymentRepository currentRepository,
+                        ProductionDeploymentPolicy productionPolicy) {
 
-    @Transactional
-    public DeploymentResponse record(
-            Long applicationId,
-            @Valid RecordDeploymentRequest request) {
-
-        // Lock an existing row before reading or creating the pointer.
-        applicationRepository.findByIdForUpdate(applicationId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Application not found"));
-
-        var release = releaseRepository
-                .findByIdAndApplication_Id(
-                        request.releaseId(),
-                        applicationId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Release not found for this application"));
-
-        Deployment deployment = new Deployment(
-                release,
-                request.environment(),
-                request.deployedBy().strip(),
-                request.deployedAt(),
-                request.notes());
-
-        Deployment saved = deploymentRepository.saveAndFlush(deployment);
-
-        CurrentDeploymentId currentId = new CurrentDeploymentId(
-                applicationId,
-                request.environment());
-
-        CurrentDeployment current = currentRepository
-                .findById(currentId)
-                .orElse(null);
-
-        if (current == null) {
-            current = new CurrentDeployment(saved);
-        } else {
-            current.changeDeployment(saved);
+                this.applicationRepository = applicationRepository;
+                this.releaseRepository = releaseRepository;
+                this.deploymentRepository = deploymentRepository;
+                this.currentRepository = currentRepository;
+                this.productionPolicy = productionPolicy;
         }
 
-        currentRepository.saveAndFlush(current);
+        @Transactional
+        public DeploymentResponse record(
+                        Long applicationId,
+                        @Valid RecordDeploymentRequest request) {
 
-        return DeploymentResponse.from(saved);
-    }
+                // Lock an existing row before reading or creating the pointer.
+                applicationRepository.findByIdForUpdate(applicationId)
+                                .orElseThrow(() -> new ResponseStatusException(
+                                                HttpStatus.NOT_FOUND,
+                                                "Application not found"));
 
-    @Transactional(readOnly = true)
-    public DeploymentResponse getCurrent(
-            Long applicationId,
-            DeploymentEnvironment environment) {
+                var release = releaseRepository
+                                .findByIdAndApplication_Id(
+                                                request.releaseId(),
+                                                applicationId)
+                                .orElseThrow(() -> new ResponseStatusException(
+                                                HttpStatus.NOT_FOUND,
+                                                "Release not found for this application"));
+                if (request.environment() == DeploymentEnvironment.PRODUCTION) {
+                        productionPolicy.check(release);
+                }
 
-        checkApplication(applicationId);
+                Deployment deployment = new Deployment(
+                                release,
+                                request.environment(),
+                                request.deployedBy().strip(),
+                                request.deployedAt(),
+                                request.notes());
 
-        CurrentDeploymentId id = new CurrentDeploymentId(
-                applicationId,
-                environment);
+                Deployment saved = deploymentRepository.saveAndFlush(deployment);
 
-        CurrentDeployment current = currentRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "No current deployment recorded for this environment"));
+                CurrentDeploymentId currentId = new CurrentDeploymentId(
+                                applicationId,
+                                request.environment());
 
-        return DeploymentResponse.from(current.getDeployment());
-    }
+                CurrentDeployment current = currentRepository
+                                .findById(currentId)
+                                .orElse(null);
 
-    @Transactional(readOnly = true)
-    public DeploymentPageResponse history(
-            Long applicationId,
-            DeploymentEnvironment environment,
-            int page,
-            int size) {
+                if (current == null) {
+                        current = new CurrentDeployment(saved);
+                } else {
+                        current.changeDeployment(saved);
+                }
 
-        if (page < 0 || size < 1 || size > 100) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Page must be at least 0 and size must be between 1 and 100");
+                currentRepository.saveAndFlush(current);
+
+                return DeploymentResponse.from(saved);
         }
 
-        checkApplication(applicationId);
+        @Transactional(readOnly = true)
+        public DeploymentResponse getCurrent(
+                        Long applicationId,
+                        DeploymentEnvironment environment) {
 
-        var pageable = PageRequest.of(
-                page,
-                size,
-                Sort.by(Sort.Direction.DESC, "id"));
+                checkApplication(applicationId);
 
-        var deployments = deploymentRepository.findByApplication_IdAndEnvironment(
-                applicationId,
-                environment,
-                pageable);
+                CurrentDeploymentId id = new CurrentDeploymentId(
+                                applicationId,
+                                environment);
 
-        return new DeploymentPageResponse(
-                deployments.getContent()
-                        .stream()
-                        .map(DeploymentResponse::from)
-                        .toList(),
-                deployments.getNumber(),
-                deployments.getSize(),
-                deployments.getTotalElements(),
-                deployments.getTotalPages());
-    }
+                CurrentDeployment current = currentRepository.findById(id)
+                                .orElseThrow(() -> new ResponseStatusException(
+                                                HttpStatus.NOT_FOUND,
+                                                "No current deployment recorded for this environment"));
 
-    private void checkApplication(Long applicationId) {
-        if (!applicationRepository.existsById(applicationId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "Application not found");
+                return DeploymentResponse.from(current.getDeployment());
         }
-    }
+
+        @Transactional(readOnly = true)
+        public DeploymentPageResponse history(
+                        Long applicationId,
+                        DeploymentEnvironment environment,
+                        int page,
+                        int size) {
+
+                if (page < 0 || size < 1 || size > 100) {
+                        throw new ResponseStatusException(
+                                        HttpStatus.BAD_REQUEST,
+                                        "Page must be at least 0 and size must be between 1 and 100");
+                }
+
+                checkApplication(applicationId);
+
+                var pageable = PageRequest.of(
+                                page,
+                                size,
+                                Sort.by(Sort.Direction.DESC, "id"));
+
+                var deployments = deploymentRepository.findByApplication_IdAndEnvironment(
+                                applicationId,
+                                environment,
+                                pageable);
+
+                return new DeploymentPageResponse(
+                                deployments.getContent()
+                                                .stream()
+                                                .map(DeploymentResponse::from)
+                                                .toList(),
+                                deployments.getNumber(),
+                                deployments.getSize(),
+                                deployments.getTotalElements(),
+                                deployments.getTotalPages());
+        }
+
+        private void checkApplication(Long applicationId) {
+                if (!applicationRepository.existsById(applicationId)) {
+                        throw new ResponseStatusException(
+                                        HttpStatus.NOT_FOUND,
+                                        "Application not found");
+                }
+        }
 }

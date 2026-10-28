@@ -31,253 +31,411 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.releaseguard.deployment.CurrentDeploymentId;
+import com.releaseguard.deployment.CurrentDeploymentRepository;
+import com.releaseguard.deployment.DeploymentEnvironment;
+import com.releaseguard.deployment.DeploymentRepository;
+import com.releaseguard.deployment.DeploymentService;
+import com.releaseguard.deployment.RecordDeploymentRequest;
+
+import org.springframework.jdbc.core.JdbcTemplate;
+
+import java.time.temporal.ChronoUnit;
+
 @SpringBootTest
 @Testcontainers
 class ReleaseDecisionPersistenceTest {
 
-    @Container
-    static final PostgreSQLContainer postgres =
-            new PostgreSQLContainer("postgres:17.11");
+        @Container
+        static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17.11");
 
-    @DynamicPropertySource
-    static void configureDatabase(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
-    }
+        @DynamicPropertySource
+        static void configureDatabase(DynamicPropertyRegistry registry) {
+                registry.add("spring.datasource.url", postgres::getJdbcUrl);
+                registry.add("spring.datasource.username", postgres::getUsername);
+                registry.add("spring.datasource.password", postgres::getPassword);
+        }
 
-    @Autowired
-    private ApplicationService applicationService;
+        @Autowired
+        private ApplicationService applicationService;
 
-    @Autowired
-    private ReleaseService releaseService;
+        @Autowired
+        private ReleaseService releaseService;
 
-    @Autowired
-    private SbomService sbomService;
+        @Autowired
+        private SbomService sbomService;
 
-    @Autowired
-    private VulnerabilityImportService importService;
+        @Autowired
+        private VulnerabilityImportService importService;
 
-    @Autowired
-    private ReleaseDecisionService decisionService;
+        @Autowired
+        private ReleaseDecisionService decisionService;
 
-    @Autowired
-    private ReleaseDecisionRepository decisionRepository;
+        @Autowired
+        private ReleaseDecisionRepository decisionRepository;
 
-    @Autowired
-    private ReleaseRepository releaseRepository;
+        @Autowired
+        private ReleaseRepository releaseRepository;
 
-    @Autowired
-    private PlatformTransactionManager transactionManager;
+        @Autowired
+        private PlatformTransactionManager transactionManager;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+        @Autowired
+        private ObjectMapper objectMapper;
 
-    @Test
-    void approvesReviewedReleaseAndRecordsExactEvidence() {
-        Fixture fixture = createFixture(false);
+        @Autowired
+        private DeploymentService deploymentService;
 
-        submit(fixture);
+        @Autowired
+        private DeploymentRepository deploymentRepository;
 
-        var decision = decisionService.decide(
-                fixture.applicationId(),
-                fixture.releaseId(),
-                approve(fixture.importId())
-        );
+        @Autowired
+        private CurrentDeploymentRepository currentRepository;
 
-        assertNotNull(decision.id());
-        assertNotNull(decision.decidedAt());
-        assertEquals(ReleaseDecisionAction.APPROVE, decision.action());
-        assertEquals(
-                ReleaseStatus.READY_FOR_REVIEW,
-                decision.fromStatus()
-        );
-        assertEquals(ReleaseStatus.APPROVED, decision.toStatus());
-        assertEquals(fixture.importId(), decision.vulnerabilityImportId());
-        assertEquals("release-policy-v1", decision.policyVersion());
-        assertEquals("Reviewer", decision.actor());
+        @Autowired
+        private JdbcTemplate jdbcTemplate;
 
-        assertEquals(ReleaseStatus.APPROVED, status(fixture));
-        assertEquals(2L, historyCount(fixture));
-    }
+        @Test
+        void approvesReviewedReleaseAndRecordsExactEvidence() {
+                Fixture fixture = createFixture(false);
 
-    @Test
-    void highFindingBlocksApprovalWithoutChangingStatusOrHistory() {
-        Fixture fixture = createFixture(true);
+                submit(fixture);
 
-        submit(fixture);
+                var decision = decisionService.decide(
+                                fixture.applicationId(),
+                                fixture.releaseId(),
+                                approve(fixture.importId()));
 
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
-                () -> decisionService.decide(
-                        fixture.applicationId(),
-                        fixture.releaseId(),
-                        approve(fixture.importId())
-                )
-        );
+                assertNotNull(decision.id());
+                assertNotNull(decision.decidedAt());
+                assertEquals(ReleaseDecisionAction.APPROVE, decision.action());
+                assertEquals(
+                                ReleaseStatus.READY_FOR_REVIEW,
+                                decision.fromStatus());
+                assertEquals(ReleaseStatus.APPROVED, decision.toStatus());
+                assertEquals(fixture.importId(), decision.vulnerabilityImportId());
+                assertEquals("release-policy-v1", decision.policyVersion());
+                assertEquals("Reviewer", decision.actor());
 
-        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
-        assertEquals(ReleaseStatus.READY_FOR_REVIEW, status(fixture));
-        assertEquals(1L, historyCount(fixture));
-    }
+                assertEquals(ReleaseStatus.APPROVED, status(fixture));
+                assertEquals(2L, historyCount(fixture));
+        }
 
-    @Test
-    void rejectsScanBelongingToAnotherRelease() {
-        Fixture target = createFixture(false);
-        Fixture other = createFixture(false);
+        @Test
+        void highFindingBlocksApprovalWithoutChangingStatusOrHistory() {
+                Fixture fixture = createFixture(true);
 
-        submit(target);
+                submit(fixture);
 
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
-                () -> decisionService.decide(
-                        target.applicationId(),
-                        target.releaseId(),
-                        approve(other.importId())
-                )
-        );
+                ResponseStatusException exception = assertThrows(
+                                ResponseStatusException.class,
+                                () -> decisionService.decide(
+                                                fixture.applicationId(),
+                                                fixture.releaseId(),
+                                                approve(fixture.importId())));
 
-        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
-        assertEquals(ReleaseStatus.READY_FOR_REVIEW, status(target));
-        assertEquals(1L, historyCount(target));
-    }
+                assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+                assertEquals(ReleaseStatus.READY_FOR_REVIEW, status(fixture));
+                assertEquals(1L, historyCount(fixture));
+        }
 
-    @Test
-    void rollsBackReleaseStatusAndDecisionHistoryTogether() {
-        Fixture fixture = createFixture(false);
+        @Test
+        void rejectsScanBelongingToAnotherRelease() {
+                Fixture target = createFixture(false);
+                Fixture other = createFixture(false);
 
-        TransactionTemplate transaction =
-                new TransactionTemplate(transactionManager);
+                submit(target);
 
-        assertThrows(
-                ForcedRollback.class,
-                () -> transaction.executeWithoutResult(transactionStatus -> {
-                    submit(fixture);
-                    throw new ForcedRollback();
-                })
-        );
+                ResponseStatusException exception = assertThrows(
+                                ResponseStatusException.class,
+                                () -> decisionService.decide(
+                                                target.applicationId(),
+                                                target.releaseId(),
+                                                approve(other.importId())));
 
-        assertEquals(ReleaseStatus.DRAFT, status(fixture));
-        assertEquals(0L, historyCount(fixture));
-    }
+                assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+                assertEquals(ReleaseStatus.READY_FOR_REVIEW, status(target));
+                assertEquals(1L, historyCount(target));
+        }
 
-    private void submit(Fixture fixture) {
-        decisionService.decide(
-                fixture.applicationId(),
-                fixture.releaseId(),
-                new ReleaseDecisionRequest(
-                        ReleaseDecisionAction.SUBMIT,
-                        "Release Team",
-                        "Ready for review",
-                        null
-                )
-        );
-    }
+        @Test
+        void rollsBackReleaseStatusAndDecisionHistoryTogether() {
+                Fixture fixture = createFixture(false);
 
-    private ReleaseDecisionRequest approve(Long importId) {
-        return new ReleaseDecisionRequest(
-                ReleaseDecisionAction.APPROVE,
-                "  Reviewer  ",
-                "Selected scan satisfies release-policy-v1",
-                importId
-        );
-    }
+                TransactionTemplate transaction = new TransactionTemplate(transactionManager);
 
-    private ReleaseStatus status(Fixture fixture) {
-        return releaseRepository.findByIdAndApplication_Id(
-                fixture.releaseId(),
-                fixture.applicationId()
-        ).orElseThrow().getStatus();
-    }
+                assertThrows(
+                                ForcedRollback.class,
+                                () -> transaction.executeWithoutResult(transactionStatus -> {
+                                        submit(fixture);
+                                        throw new ForcedRollback();
+                                }));
 
-    private long historyCount(Fixture fixture) {
-        return decisionRepository.findByRelease_Id(
-                fixture.releaseId(),
-                PageRequest.of(0, 10)
-        ).getTotalElements();
-    }
+                assertEquals(ReleaseStatus.DRAFT, status(fixture));
+                assertEquals(0L, historyCount(fixture));
+        }
 
-    private Fixture createFixture(boolean highFinding) {
-        var application = applicationService.create(
-                new CreateApplicationRequest(
-                        "Approval Test " + UUID.randomUUID(),
-                        null,
-                        null,
-                        "Release Team"
-                )
-        );
+        @Test
+        void allowsProductionWithFreshApprovedEvidence() {
+                Fixture fixture = createFixture(false);
+                approveFixture(fixture);
 
-        var release = releaseService.create(
-                application.id(),
-                new CreateReleaseRequest(
-                        "v1.0.0",
-                        "a".repeat(40),
-                        "test-app:1.0.0",
-                        null
-                )
-        );
+                var deployment = deploymentService.record(
+                                fixture.applicationId(),
+                                productionRequest(fixture));
 
-        byte[] inventory = """
-                {
-                  "bomFormat": "CycloneDX",
-                  "specVersion": "1.6",
-                  "components": [
-                    {
-                      "bom-ref": "demo",
-                      "type": "library",
-                      "name": "demo-library",
-                      "version": "1.0.0"
-                    }
-                  ]
-                }
-                """.getBytes(StandardCharsets.UTF_8);
+                assertEquals(fixture.releaseId(), deployment.releaseId());
+                assertEquals(
+                                DeploymentEnvironment.PRODUCTION,
+                                deployment.environment());
 
-        var sbom = sbomService.upload(
-                application.id(),
-                release.id(),
-                "bom.json",
-                inventory
-        );
+                var current = currentRepository.findById(
+                                productionKey(fixture)).orElseThrow();
 
-        List<Map<String, String>> findings = highFinding
-                ? List.of(Map.of(
-                        "componentBomRef", "demo",
-                        "vulnerabilityId", "DEMO-001",
-                        "source", "demo",
-                        "severity", "HIGH"
-                ))
-                : List.of();
+                assertEquals(
+                                deployment.id(),
+                                current.getDeployment().getId());
 
-        byte[] report = objectMapper.writeValueAsBytes(Map.of(
-                "formatVersion", "1",
-                "sbomSha256", sbom.documentSha256(),
-                "scannerName", "DemoScanner",
-                "scannerVersion", "1.0.0",
-                "scannedAt", Instant.now().minusSeconds(60).toString(),
-                "findings", findings
-        ));
+                assertEquals(
+                                1L,
+                                deploymentRepository
+                                                .findByApplication_IdAndEnvironment(
+                                                                fixture.applicationId(),
+                                                                DeploymentEnvironment.PRODUCTION,
+                                                                PageRequest.of(0, 10))
+                                                .getTotalElements());
+        }
 
-        var scan = importService.upload(
-                application.id(),
-                release.id(),
-                "report.json",
-                report
-        );
+        @Test
+        void blocksDraftProductionWithoutCreatingHistoryOrPointer() {
+                Fixture fixture = createFixture(false);
 
-        return new Fixture(
-                application.id(),
-                release.id(),
-                scan.id()
-        );
-    }
+                assertProductionBlockedWithoutChanges(fixture);
 
-    private record Fixture(
-            Long applicationId,
-            Long releaseId,
-            Long importId
-    ) {
-    }
+                assertEquals(ReleaseStatus.DRAFT, status(fixture));
+        }
 
-    private static class ForcedRollback extends RuntimeException {
-    }
+        @Test
+        void blocksRevokedApprovalWithoutReplacingCurrentDeployment() {
+                Fixture fixture = createFixture(false);
+                approveFixture(fixture);
+
+                var existing = deploymentService.record(
+                                fixture.applicationId(),
+                                productionRequest(fixture));
+
+                decisionService.decide(
+                                fixture.applicationId(),
+                                fixture.releaseId(),
+                                new ReleaseDecisionRequest(
+                                                ReleaseDecisionAction.REVOKE,
+                                                "Reviewer",
+                                                "Withdraw approval before another deployment",
+                                                null));
+
+                assertProductionBlockedWithoutChanges(fixture);
+
+                assertEquals(ReleaseStatus.DRAFT, status(fixture));
+                assertEquals(
+                                existing.id(),
+                                currentDeploymentId(fixture));
+        }
+
+        @Test
+        void blocksStaleEvidenceWithoutReplacingCurrentDeployment() {
+                Fixture fixture = createFixture(false);
+                approveFixture(fixture);
+
+                var existing = deploymentService.record(
+                                fixture.applicationId(),
+                                productionRequest(fixture));
+
+                // Test-only change: simulate evidence aging after approval.
+                Instant oldScanTime = Instant.now().minus(8, ChronoUnit.DAYS);
+
+                int updated = jdbcTemplate.update(
+                                """
+                                                UPDATE vulnerability_imports
+                                                SET scanned_at = ?
+                                                WHERE id = ?
+                                                """,
+                                java.sql.Timestamp.from(oldScanTime),
+                                fixture.importId());
+
+                assertEquals(1, updated);
+
+                assertProductionBlockedWithoutChanges(fixture);
+
+                assertEquals(ReleaseStatus.APPROVED, status(fixture));
+                assertEquals(
+                                existing.id(),
+                                currentDeploymentId(fixture));
+        }
+
+        private void approveFixture(Fixture fixture) {
+                submit(fixture);
+
+                decisionService.decide(
+                                fixture.applicationId(),
+                                fixture.releaseId(),
+                                approve(fixture.importId()));
+        }
+
+        private RecordDeploymentRequest productionRequest(Fixture fixture) {
+                return new RecordDeploymentRequest(
+                                fixture.releaseId(),
+                                DeploymentEnvironment.PRODUCTION,
+                                "Deploy Team",
+                                Instant.now().minusSeconds(5),
+                                "Synthetic production deployment for policy testing");
+        }
+
+        private CurrentDeploymentId productionKey(Fixture fixture) {
+                return new CurrentDeploymentId(
+                                fixture.applicationId(),
+                                DeploymentEnvironment.PRODUCTION);
+        }
+
+        private Long currentDeploymentId(Fixture fixture) {
+                return currentRepository.findById(productionKey(fixture))
+                                .map(pointer -> pointer.getDeployment().getId())
+                                .orElse(null);
+        }
+
+        private void assertProductionBlockedWithoutChanges(Fixture fixture) {
+                long historyBefore = deploymentRepository
+                                .findByApplication_IdAndEnvironment(
+                                                fixture.applicationId(),
+                                                DeploymentEnvironment.PRODUCTION,
+                                                PageRequest.of(0, 10))
+                                .getTotalElements();
+
+                Long currentBefore = currentDeploymentId(fixture);
+
+                ResponseStatusException exception = assertThrows(
+                                ResponseStatusException.class,
+                                () -> deploymentService.record(
+                                                fixture.applicationId(),
+                                                productionRequest(fixture)));
+
+                assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+
+                assertEquals(
+                                historyBefore,
+                                deploymentRepository
+                                                .findByApplication_IdAndEnvironment(
+                                                                fixture.applicationId(),
+                                                                DeploymentEnvironment.PRODUCTION,
+                                                                PageRequest.of(0, 10))
+                                                .getTotalElements());
+
+                assertEquals(
+                                currentBefore,
+                                currentDeploymentId(fixture));
+        }
+
+        private void submit(Fixture fixture) {
+                decisionService.decide(
+                                fixture.applicationId(),
+                                fixture.releaseId(),
+                                new ReleaseDecisionRequest(
+                                                ReleaseDecisionAction.SUBMIT,
+                                                "Release Team",
+                                                "Ready for review",
+                                                null));
+        }
+
+        private ReleaseDecisionRequest approve(Long importId) {
+                return new ReleaseDecisionRequest(
+                                ReleaseDecisionAction.APPROVE,
+                                "  Reviewer  ",
+                                "Selected scan satisfies release-policy-v1",
+                                importId);
+        }
+
+        private ReleaseStatus status(Fixture fixture) {
+                return releaseRepository.findByIdAndApplication_Id(
+                                fixture.releaseId(),
+                                fixture.applicationId()).orElseThrow().getStatus();
+        }
+
+        private long historyCount(Fixture fixture) {
+                return decisionRepository.findByRelease_Id(
+                                fixture.releaseId(),
+                                PageRequest.of(0, 10)).getTotalElements();
+        }
+
+        private Fixture createFixture(boolean highFinding) {
+                var application = applicationService.create(
+                                new CreateApplicationRequest(
+                                                "Approval Test " + UUID.randomUUID(),
+                                                null,
+                                                null,
+                                                "Release Team"));
+
+                var release = releaseService.create(
+                                application.id(),
+                                new CreateReleaseRequest(
+                                                "v1.0.0",
+                                                "a".repeat(40),
+                                                "test-app:1.0.0",
+                                                null));
+
+                byte[] inventory = """
+                                {
+                                  "bomFormat": "CycloneDX",
+                                  "specVersion": "1.6",
+                                  "components": [
+                                    {
+                                      "bom-ref": "demo",
+                                      "type": "library",
+                                      "name": "demo-library",
+                                      "version": "1.0.0"
+                                    }
+                                  ]
+                                }
+                                """.getBytes(StandardCharsets.UTF_8);
+
+                var sbom = sbomService.upload(
+                                application.id(),
+                                release.id(),
+                                "bom.json",
+                                inventory);
+
+                List<Map<String, String>> findings = highFinding
+                                ? List.of(Map.of(
+                                                "componentBomRef", "demo",
+                                                "vulnerabilityId", "DEMO-001",
+                                                "source", "demo",
+                                                "severity", "HIGH"))
+                                : List.of();
+
+                byte[] report = objectMapper.writeValueAsBytes(Map.of(
+                                "formatVersion", "1",
+                                "sbomSha256", sbom.documentSha256(),
+                                "scannerName", "DemoScanner",
+                                "scannerVersion", "1.0.0",
+                                "scannedAt", Instant.now().minusSeconds(60).toString(),
+                                "findings", findings));
+
+                var scan = importService.upload(
+                                application.id(),
+                                release.id(),
+                                "report.json",
+                                report);
+
+                return new Fixture(
+                                application.id(),
+                                release.id(),
+                                scan.id());
+        }
+
+        private record Fixture(
+                        Long applicationId,
+                        Long releaseId,
+                        Long importId) {
+        }
+
+        private static class ForcedRollback extends RuntimeException {
+        }
 }
