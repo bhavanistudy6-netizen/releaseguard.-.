@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.time.Instant;
 
@@ -104,6 +106,45 @@ public class ReleaseDecisionService {
 
         return ReleaseDecisionResponse.from(
                 decisionRepository.saveAndFlush(decision));
+    }
+
+    @Transactional(readOnly = true)
+    public ReleaseDecisionPageResponse history(
+            Long applicationId,
+            Long releaseId,
+            int page,
+            int size) {
+
+        if (page < 0 || size < 1 || size > 100) {
+            throw error(
+                    HttpStatus.BAD_REQUEST,
+                    "Page must be non-negative and size must be between 1 and 100");
+        }
+
+        releaseRepository
+                .findByIdAndApplication_Id(releaseId, applicationId)
+                .orElseThrow(() -> error(
+                        HttpStatus.NOT_FOUND,
+                        "Release not found for this application"));
+
+        var decisions = decisionRepository.findByRelease_Id(
+                releaseId,
+                PageRequest.of(
+                        page,
+                        size,
+                        Sort.by(Sort.Direction.DESC, "id")));
+
+        var content = decisions.getContent()
+                .stream()
+                .map(ReleaseDecisionResponse::from)
+                .toList();
+
+        return new ReleaseDecisionPageResponse(
+                content,
+                decisions.getNumber(),
+                decisions.getSize(),
+                decisions.getTotalElements(),
+                decisions.getTotalPages());
     }
 
     private VulnerabilityImport checkApprovalEvidence(
