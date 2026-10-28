@@ -13,6 +13,7 @@ import java.time.Instant;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.mockito.AdditionalMatchers.aryEq;
@@ -137,5 +138,42 @@ class SbomControllerTest {
 
         mvc.perform(multipart(URL).file(file))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void getSbomReturnsOk() throws Exception {
+        SbomUploadResponse response = new SbomUploadResponse(
+                7L,
+                1L,
+                "bom.json",
+                "CycloneDX",
+                "1.6",
+                "a".repeat(64),
+                42,
+                Instant.parse("2026-10-15T12:00:00Z")
+        );
+
+        when(service.getSbom(1L, 1L)).thenReturn(response);
+
+        mvc.perform(get(URL))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(7))
+                .andExpect(jsonPath("$.originalFilename").value("bom.json"))
+                .andExpect(jsonPath("$.componentCount").value(42));
+
+        verify(service).getSbom(1L, 1L);
+    }
+
+    @Test
+    void getSbomNotFoundReturns404() throws Exception {
+        when(service.getSbom(1L, 1L))
+                .thenThrow(new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "No SBOM has been uploaded for this release"));
+
+        mvc.perform(get(URL))
+                .andExpect(status().isNotFound());
+
+        verify(service).getSbom(1L, 1L);
     }
 }
