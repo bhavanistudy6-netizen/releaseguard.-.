@@ -3,6 +3,8 @@ name: releaseguard
 services:
   postgres:
     image: postgres:17
+    container_name: releaseguard-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
       POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
@@ -17,6 +19,59 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    networks:
+      - releaseguard-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: releaseguard-backend:${IMAGE_TAG:-local}
+    container_name: releaseguard-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-releaseguard}
+      DB_USERNAME: ${POSTGRES_USER:-releaseguard}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_PROFILES_ACTIVE: prod
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    networks:
+      - releaseguard-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: releaseguard-frontend:${IMAGE_TAG:-local}
+    container_name: releaseguard-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks:
+      - releaseguard-network
 
 volumes:
   postgres_data:
+
+networks:
+  releaseguard-network:
+    driver: bridge
