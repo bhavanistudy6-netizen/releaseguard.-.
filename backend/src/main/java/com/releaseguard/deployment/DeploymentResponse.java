@@ -11,8 +11,43 @@ public record DeploymentResponse(
         String deployedBy,
         Instant deployedAt,
         Instant recordedAt,
-        String notes) {
+        String notes,
+        DeploymentType deploymentType,
+        Long rollbackFromDeploymentId,
+        Long rollbackTargetDeploymentId,
+        String rollbackReason) {
+    // Retains compatibility with existing nine-argument callers.
+    public DeploymentResponse(
+            Long id,
+            Long applicationId,
+            Long releaseId,
+            String releaseVersion,
+            DeploymentEnvironment environment,
+            String deployedBy,
+            Instant deployedAt,
+            Instant recordedAt,
+            String notes) {
+
+        this(
+                id,
+                applicationId,
+                releaseId,
+                releaseVersion,
+                environment,
+                deployedBy,
+                deployedAt,
+                recordedAt,
+                notes,
+                DeploymentType.DEPLOY,
+                null,
+                null,
+                null);
+    }
+
     public static DeploymentResponse from(Deployment deployment) {
+        var from = deployment.getRollbackFromDeployment();
+        var target = deployment.getRollbackTargetDeployment();
+
         return new DeploymentResponse(
                 deployment.getId(),
                 deployment.getApplication().getId(),
@@ -22,6 +57,10 @@ public record DeploymentResponse(
                 deployment.getDeployedBy(),
                 deployment.getDeployedAt(),
                 deployment.getRecordedAt(),
-                deployment.getNotes());
+                deployment.getNotes(),
+                deployment.getDeploymentType(),
+                from == null ? null : from.getId(),
+                target == null ? null : target.getId(),
+                deployment.getRollbackReason());
     }
 }

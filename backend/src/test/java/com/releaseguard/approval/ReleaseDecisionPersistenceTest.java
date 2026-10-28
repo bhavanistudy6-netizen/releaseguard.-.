@@ -42,6 +42,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.temporal.ChronoUnit;
 
+import com.releaseguard.deployment.RecordRollbackRequest;
+import com.releaseguard.deployment.RollbackService;
+import com.releaseguard.deployment.DeploymentType;
+
 @SpringBootTest
 @Testcontainers
 class ReleaseDecisionPersistenceTest {
@@ -94,6 +98,9 @@ class ReleaseDecisionPersistenceTest {
 
         @Autowired
         private JdbcTemplate jdbcTemplate;
+
+        @Autowired
+        private RollbackService rollbackService;
 
         @Test
         void approvesReviewedReleaseAndRecordsExactEvidence() {
@@ -198,6 +205,101 @@ class ReleaseDecisionPersistenceTest {
 
                 assertEquals(
                                 1L,
+                                deploymentRepository
+                                                .findByApplication_IdAndEnvironment(
+                                                                fixture.applicationId(),
+                                                                DeploymentEnvironment.PRODUCTION,
+                                                                PageRequest.of(0, 10))
+                                                .getTotalElements());
+        }
+
+        @Test
+        void allowsProductionRollbackWithFreshApprovedEvidence() {
+                Fixture fixture = createFixture(false);
+                approveFixture(fixture);
+
+                var first = deploymentService.record(
+                                fixture.applicationId(),
+                                productionRequest(fixture));
+
+                var second = deploymentService.record(
+                                fixture.applicationId(),
+                                productionRequest(fixture));
+
+                var result = rollbackService.record(
+                                fixture.applicationId(),
+                                new RecordRollbackRequest(
+                                                DeploymentEnvironment.PRODUCTION,
+                                                second.id(),
+                                                first.id(),
+                                                "Deploy Team",
+                                                Instant.now().minusSeconds(5),
+                                                "Restore previous approved deployment"));
+
+                assertEquals(DeploymentType.ROLLBACK, result.deploymentType());
+                assertEquals(first.id(), result.rollbackTargetDeploymentId());
+                assertEquals(second.id(), result.rollbackFromDeploymentId());
+                assertEquals(fixture.releaseId(), result.deployment().releaseId());
+
+                assertEquals(
+                                result.deployment().id(),
+                                currentDeploymentId(fixture));
+
+                assertEquals(
+                                3L,
+                                deploymentRepository
+                                                .findByApplication_IdAndEnvironment(
+                                                                fixture.applicationId(),
+                                                                DeploymentEnvironment.PRODUCTION,
+                                                                PageRequest.of(0, 10))
+                                                .getTotalElements());
+        }
+
+        @Test
+        void blocksProductionRollbackWhenApprovalEvidenceBecomesStale() {
+                Fixture fixture = createFixture(false);
+                approveFixture(fixture);
+
+                var first = deploymentService.record(
+                                fixture.applicationId(),
+                                productionRequest(fixture));
+
+                var second = deploymentService.record(
+                                fixture.applicationId(),
+                                productionRequest(fixture));
+
+                int updated = jdbcTemplate.update(
+                                """
+                                                UPDATE vulnerability_imports
+                                                SET scanned_at = ?
+                                                WHERE id = ?
+                                                """,
+                                java.sql.Timestamp.from(
+                                                Instant.now().minus(8, ChronoUnit.DAYS)),
+                                fixture.importId());
+
+                assertEquals(1, updated);
+
+                var exception = assertThrows(
+                                ResponseStatusException.class,
+                                () -> rollbackService.record(
+                                                fixture.applicationId(),
+                                                new RecordRollbackRequest(
+                                                                DeploymentEnvironment.PRODUCTION,
+                                                                second.id(),
+                                                                first.id(),
+                                                                "Deploy Team",
+                                                                Instant.now().minusSeconds(5),
+                                                                "Attempt rollback with stale evidence")));
+
+                assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+
+                assertEquals(
+                                second.id(),
+                                currentDeploymentId(fixture));
+
+                assertEquals(
+                                2L,
                                 deploymentRepository
                                                 .findByApplication_IdAndEnvironment(
                                                                 fixture.applicationId(),

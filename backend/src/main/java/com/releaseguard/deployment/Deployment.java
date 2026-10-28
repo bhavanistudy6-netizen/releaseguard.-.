@@ -38,6 +38,21 @@ public class Deployment {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "deployment_type", nullable = false, length = 20)
+    private DeploymentType deploymentType = DeploymentType.DEPLOY;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "rollback_from_deployment_id")
+    private Deployment rollbackFromDeployment;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "rollback_target_deployment_id")
+    private Deployment rollbackTargetDeployment;
+
+    @Column(name = "rollback_reason", columnDefinition = "TEXT")
+    private String rollbackReason;
+
     protected Deployment() {
     }
 
@@ -90,5 +105,56 @@ public class Deployment {
 
     public String getNotes() {
         return notes;
+    }
+
+    public static Deployment rollback(
+            Deployment from,
+            Deployment target,
+            String deployedBy,
+            Instant deployedAt,
+            String reason) {
+
+        if (!from.getApplication().getId().equals(
+                target.getApplication().getId())
+                || from.getEnvironment() != target.getEnvironment()) {
+
+            throw new IllegalArgumentException(
+                    "Rollback deployments must belong to the same application and environment");
+        }
+
+        if (target.getId() >= from.getId()) {
+            throw new IllegalArgumentException(
+                    "Rollback target must precede the current deployment");
+        }
+
+        Deployment deployment = new Deployment(
+                target.getRelease(),
+                target.getEnvironment(),
+                deployedBy,
+                deployedAt,
+                null);
+
+        deployment.deploymentType = DeploymentType.ROLLBACK;
+        deployment.rollbackFromDeployment = from;
+        deployment.rollbackTargetDeployment = target;
+        deployment.rollbackReason = reason;
+
+        return deployment;
+    }
+
+    public DeploymentType getDeploymentType() {
+        return deploymentType;
+    }
+
+    public Deployment getRollbackFromDeployment() {
+        return rollbackFromDeployment;
+    }
+
+    public Deployment getRollbackTargetDeployment() {
+        return rollbackTargetDeployment;
+    }
+
+    public String getRollbackReason() {
+        return rollbackReason;
     }
 }
