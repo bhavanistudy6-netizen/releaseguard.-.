@@ -19,6 +19,12 @@ pipeline {
 
         stage('Verify Tools') {
             steps {
+                script {
+                    if (isUnix()) {
+                        error 'This pipeline requires a Windows agent.'
+                    }
+                }
+
                 bat 'java -version'
                 bat 'git --version'
                 bat 'call node --version'
@@ -51,6 +57,26 @@ pipeline {
             }
         }
 
+        stage('Verify Backend Coverage') {
+            steps {
+                script {
+                    if (!fileExists(
+                            'backend/target/site/jacoco/jacoco.xml')) {
+                        error(
+                            'JaCoCo XML report is missing. ' +
+                            'Ensure backend/pom.xml contains the ' +
+                            'JaCoCo configuration and is committed.'
+                        )
+                    }
+                }
+
+                archiveArtifacts(
+                    artifacts: 'backend/target/site/jacoco/**',
+                    fingerprint: true
+                )
+            }
+        }
+
         stage('Frontend Tests') {
             steps {
                 dir('frontend') {
@@ -72,15 +98,48 @@ pipeline {
                 )
             }
         }
+
+        stage('SonarQube Analysis and Quality Gate') {
+            steps {
+                script {
+                    def scannerHome = tool 'SonarScanner'
+
+                    withEnv([
+                        "SONAR_SCANNER_HOME=${scannerHome}"
+                    ]) {
+                        withSonarQubeEnv('SonarQube') {
+                            withCredentials([
+                                string(
+                                    credentialsId: 'sonarqube-token',
+                                    variable: 'SONAR_TOKEN'
+                                )
+                            ]) {
+                                bat '''
+                                    @call "%SONAR_SCANNER_HOME%\\bin\\sonar-scanner.bat" -Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=300
+                                '''
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     post {
         success {
-            echo 'ReleaseGuard tests and builds passed.'
+            echo 'ReleaseGuard builds, tests, and SonarQube quality gate passed.'
+        }
+
+        unstable {
+            echo 'Pipeline is unstable. Review the published test results.'
         }
 
         failure {
-            echo 'Build failed. Open Console Output for the failing command.'
+            echo 'Pipeline failed. Check the first failing stage in Console Output.'
+        }
+
+        aborted {
+            echo 'Pipeline was cancelled or exceeded its timeout.'
         }
     }
 }
