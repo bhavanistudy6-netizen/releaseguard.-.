@@ -1,0 +1,10 @@
+{
+    "sbomSha256":  "e75bebf6783bdb11564cd892bf696ad1b6e501e1ec08c4aa72dc157241aef8d2",
+    "scannerVersion":  "1.0.0",
+    "scannerName":  "DemoScanner",
+    "findings":  [
+
+                 ],
+    "scannedAt":  "2026-10-30T13:59:11.6852670+00:00",
+    "formatVersion":  "1"
+}

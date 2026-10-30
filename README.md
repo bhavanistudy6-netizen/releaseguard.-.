@@ -262,3 +262,4 @@ The project includes a declarative `Jenkinsfile` and `sonar-project.properties` 
 | **Milestone 10** | JaCoCo Coverage & SonarQube Config | **Verified Configuration** (`backend/pom.xml`, `sonar-project.properties`) |
 | **Milestone 10** | Declarative `Jenkinsfile` | **Verified Configuration** (immutable commit SHA tags, Testcontainers notes, Quality Gate step) |
 | **Milestone 10** | External Jenkins / SonarQube Server Execution | **External Setup Required** (requires live Jenkins controller & SonarQube server credentials) |
+
