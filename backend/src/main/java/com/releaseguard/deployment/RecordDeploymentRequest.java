@@ -10,7 +10,9 @@ public record RecordDeploymentRequest(
 
         @NotNull DeploymentEnvironment environment,
 
-        @Size(max = 150) String deployedBy,
+        @Pattern(regexp = "^(?!\\s*$).+", message = "deployedBy must not be blank")
+        @Size(max = 150)
+        String deployedBy,
 
         @NotNull @PastOrPresent Instant deployedAt,
 

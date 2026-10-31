@@ -3,6 +3,7 @@ package com.releaseguard.deployment;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PastOrPresent;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
@@ -20,6 +21,7 @@ public record RecordRollbackRequest(
         @Positive
         Long targetDeploymentId,
 
+        @Pattern(regexp = "^(?!\\s*$).+", message = "deployedBy must not be blank")
         @Size(max = 150)
         String deployedBy,
 

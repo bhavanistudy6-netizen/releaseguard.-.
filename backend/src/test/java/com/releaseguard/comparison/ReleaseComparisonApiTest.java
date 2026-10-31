@@ -16,6 +16,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import tools.jackson.databind.ObjectMapper;
 
+import java.net.CookieManager;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -40,6 +41,8 @@ class ReleaseComparisonApiTest {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("security.initial-admin.password", () -> "AdminSecurePass2026!");
+        registry.add("security.initial-admin.username", () -> "admin");
     }
 
     @Autowired
@@ -233,15 +236,20 @@ class ReleaseComparisonApiTest {
                         + "&toReleaseId=" + toReleaseId
         );
 
-        HttpRequest request = HttpRequest.newBuilder(uri)
-                .GET()
-                .build();
+        CookieManager cookieManager = new CookieManager();
+        try (HttpClient client = HttpClient.newBuilder().cookieHandler(cookieManager).build()) {
+            URI loginUri = URI.create("http://localhost:" + port + "/api/v1/auth/login");
+            HttpRequest loginRequest = HttpRequest.newBuilder(loginUri)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString("{\"username\":\"admin\",\"password\":\"AdminSecurePass2026!\"}"))
+                    .build();
+            HttpResponse<String> loginResponse = client.send(loginRequest, HttpResponse.BodyHandlers.ofString());
+            if (loginResponse.statusCode() != 200) {
+                throw new IllegalStateException("Failed to authenticate test client: " + loginResponse.statusCode() + " " + loginResponse.body());
+            }
 
-        try (HttpClient client = HttpClient.newHttpClient()) {
-            return client.send(
-                    request,
-                    HttpResponse.BodyHandlers.ofString()
-            );
+            HttpRequest request = HttpRequest.newBuilder(uri).GET().build();
+            return client.send(request, HttpResponse.BodyHandlers.ofString());
         }
     }
 }

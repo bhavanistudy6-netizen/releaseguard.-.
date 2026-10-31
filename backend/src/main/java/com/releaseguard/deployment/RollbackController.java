@@ -28,24 +28,21 @@ public class RollbackController {
             @Valid @RequestBody RecordRollbackRequest request,
             Authentication authentication) {
 
-        String deployedBy;
-        Long deployedByUserId = null;
-
+        RollbackResponse response;
         if (authentication != null && authentication.getPrincipal() instanceof ReleaseGuardUserDetails userDetails) {
-            deployedBy = userDetails.getDisplayName() != null && !userDetails.getDisplayName().isBlank()
+            String deployedBy = userDetails.getDisplayName() != null && !userDetails.getDisplayName().isBlank()
                     ? userDetails.getDisplayName() + " (" + userDetails.getUsername() + ")"
                     : userDetails.getUsername();
-            deployedByUserId = userDetails.getId();
+            Long deployedByUserId = userDetails.getId();
+            response = service.record(applicationId, request, deployedBy, deployedByUserId);
         } else if (authentication != null && authentication.getName() != null && !authentication.getName().isBlank()) {
-            deployedBy = authentication.getName();
-        } else if (request.deployedBy() != null && !request.deployedBy().isBlank()) {
-            deployedBy = request.deployedBy().strip();
+            response = service.record(applicationId, request, authentication.getName(), null);
         } else {
-            deployedBy = "authenticated-deployer";
+            response = service.record(applicationId, request);
         }
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(service.record(applicationId, request, deployedBy, deployedByUserId));
+                .body(response);
     }
 }
