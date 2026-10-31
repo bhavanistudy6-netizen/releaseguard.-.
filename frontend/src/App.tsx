@@ -12,88 +12,128 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('applications');
   const [applications, setApplications] = useState<Application[]>([]);
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
+  const [applicationError, setApplicationError] = useState<string | null>(null);
 
   const fetchApps = useCallback(async () => {
     try {
-      const res = await api.getApplications(0, 50);
-      setApplications(res.content);
-      if (res.content.length > 0 && !selectedApp) {
-        setSelectedApp(res.content[0]);
-      }
+      setApplicationError(null);
+
+      const response = await api.getApplications(0, 50);
+      setApplications(response.content);
     } catch {
-      // ignore
+      setApplicationError('Unable to refresh the application selector.');
     }
-  }, [selectedApp]);
+  }, []);
 
   useEffect(() => {
-    fetchApps();
+    void fetchApps();
   }, [fetchApps]);
+
+  const backToApplications = () => {
+    setSelectedApp(null);
+    setActiveTab('applications');
+    void fetchApps();
+  };
+
+  const handleTabChange = (tab: ActiveTab) => {
+    setActiveTab(tab);
+
+    if (tab === 'applications') {
+      setSelectedApp(null);
+    }
+
+    void fetchApps();
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
       <GovernanceNoticeBanner />
+
       <Header
         activeTab={activeTab}
-        onTabChange={(tab) => {
-          setActiveTab(tab);
-        }}
+        onTabChange={handleTabChange}
         selectedAppName={selectedApp ? selectedApp.name : undefined}
-        onBackToApps={() => {
-          setSelectedApp(null);
-          setActiveTab('applications');
-        }}
+        onBackToApps={backToApplications}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {applicationError && (
+          <div
+            role="alert"
+            className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          >
+            {applicationError}
+
+            <button
+              type="button"
+              onClick={() => void fetchApps()}
+              className="ml-3 font-semibold underline"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {activeTab === 'applications' && (
-          <>
-            {selectedApp ? (
-              <ApplicationDetailView
-                application={selectedApp}
-                applications={applications}
-                onBack={() => {
-                  setSelectedApp(null);
-                  fetchApps();
-                }}
-              />
-            ) : (
-              <ApplicationList
-                onSelectApplication={(app) => {
-                  setSelectedApp(app);
-                  setActiveTab('applications');
-                }}
-              />
-            )}
-          </>
+          selectedApp ? (
+            <ApplicationDetailView
+              key={selectedApp.id}
+              application={selectedApp}
+              applications={applications}
+              onBack={backToApplications}
+            />
+          ) : (
+            <ApplicationList
+              onSelectApplication={(application) => {
+                setSelectedApp(application);
+                setActiveTab('applications');
+                void fetchApps();
+              }}
+            />
+          )
         )}
 
         {activeTab === 'environments' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+              <label
+                htmlFor="environment-application"
+                className="text-xs font-semibold text-slate-700 uppercase tracking-wider"
+              >
                 Select Active Application:
               </label>
+
               <select
-                value={selectedApp?.id || ''}
-                onChange={(e) => {
-                  const found = applications.find((a) => a.id === Number(e.target.value));
-                  if (found) setSelectedApp(found);
+                id="environment-application"
+                value={selectedApp?.id ?? ''}
+                onChange={(event) => {
+                  const application = applications.find(
+                    (item) => item.id === Number(event.target.value)
+                  );
+
+                  setSelectedApp(application ?? null);
                 }}
                 className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-semibold focus:ring-2 focus:ring-emerald-500 outline-none"
               >
-                {applications.map((app) => (
-                  <option key={app.id} value={app.id}>
-                    {app.name} (#{app.id} • {app.ownerTeam})
+                <option value="">Select an application</option>
+
+                {applications.map((application) => (
+                  <option key={application.id} value={application.id}>
+                    {application.name} (#{application.id} — {application.ownerTeam})
                   </option>
                 ))}
               </select>
             </div>
 
             {selectedApp ? (
-              <EnvironmentView application={selectedApp} releases={[]} />
+              <EnvironmentView
+                key={selectedApp.id}
+                application={selectedApp}
+                releases={[]}
+              />
             ) : (
-              <div className="p-8 text-center text-xs text-slate-500">
-                Please register an application first to track environments.
+              <div className="p-8 text-center text-sm text-slate-500">
+                Select an application to view its environments.
               </div>
             )}
           </div>
@@ -102,13 +142,15 @@ export default function App() {
         {activeTab === 'comparison' && (
           <ReleaseComparisonView
             applications={applications}
-            initialApplication={selectedApp || undefined}
+            initialApplication={selectedApp ?? undefined}
           />
         )}
       </main>
 
       <footer className="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500">
-        <p>ReleaseGuard Governance Dashboard • Enterprise Software Supply Chain Security</p>
+        <p>
+          ReleaseGuard Governance Dashboard — Enterprise Software Supply Chain Security
+        </p>
       </footer>
     </div>
   );

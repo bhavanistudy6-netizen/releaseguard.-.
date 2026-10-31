@@ -225,7 +225,30 @@ Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/v1/applications/1
 
 ---
 
-## 7. CI/CD: Jenkins & SonarQube
+## 7. Real GitHub Project Demonstration: Spring PetClinic REST
+
+In addition to synthetic demo data, ReleaseGuard includes a comprehensive demonstration using a real, publicly available GitHub application: [Spring PetClinic REST](https://github.com/spring-petclinic/spring-petclinic-rest).
+
+### Real Project Highlights
+- **Application**: `Spring PetClinic REST` (`https://github.com/spring-petclinic/spring-petclinic-rest`)
+- **Release 1 (Baseline)**: Tag `v3.2.1` &bull; Commit `dc06a75075a6a0d493897f8982df7e474afcd7cf`
+- **Release 2 (Upgrade)**: Tag `v3.4.0` &bull; Commit `26a80b7a510af1fda0acdfb45d65aa480bdb7607`
+- **Real CycloneDX 1.6 SBOMs**: 100 components (`v3.2.1`) and 101 components (`v3.4.0`)
+- **Real Vulnerability Scanning**: Aqua Security Trivy 0.57.1 (104 findings in `v3.2.1`, 101 findings in `v3.4.0`)
+- **Tested Report Adapter**: [`scripts/trivy-adapter.mjs`](file:///C:/Users/vigneshwara%20rao/Projects/releaseguard/scripts/trivy-adapter.mjs) with 100% passing unit tests ([`scripts/trivy-adapter.test.mjs`](file:///C:/Users/vigneshwara%20rao/Projects/releaseguard/scripts/trivy-adapter.test.mjs))
+- **Honest Policy Enforcement**: `release-policy-v1` accurately blocks production approval due to genuine upstream CVEs in dependencies, demonstrating strict governance integrity.
+- **Atomic Rollback**: Recorded rollback in `STAGING` with concurrency protection.
+
+See the complete walkthrough, hashes, and evidence in [**`docs/REAL_PROJECT_DEMO.md`**](file:///C:/Users/vigneshwara%20rao/Projects/releaseguard/docs/REAL_PROJECT_DEMO.md).
+
+### Run the Real Project Demonstration in 1 Command
+```powershell
+node scripts/execute-real-demo.mjs
+```
+
+---
+
+## 8. CI/CD: Jenkins & SonarQube
 
 The project includes a declarative `Jenkinsfile` and `sonar-project.properties` implementing:
 1. **Prerequisites & Agent Verification**: Checks Java 21, Docker daemon availability, and Node tooling.
@@ -249,10 +272,11 @@ The project includes a declarative `Jenkinsfile` and `sonar-project.properties` 
 
 ---
 
-## 8. Completion & Verification Checklist
+## 9. Completion & Verification Checklist
 
 | Milestone | Component | Verification Status |
 | :--- | :--- | :--- |
+| **Real Demo** | Spring PetClinic REST Integration | **Verified Real GitHub Demonstration** (Spring Boot 3.2.1 -> 3.4.0, CycloneDX 1.6, Trivy 0.57.1, policy enforcement, atomic rollback) |
 | **Milestone 1–8** | Backend Foundation, Registry, SBOM, Comparison, Findings, Deployments, Approvals | **Verified Locally** (145 tests, 0 failures) |
 | **Milestone 9** | Scoped Endpoints (`/sbom`, `/vulnerability-imports`) | **Verified Locally** (`SbomControllerTest`, `VulnerabilityControllerTest`) |
 | **Milestone 9** | Frontend React Dashboard (All 11 Workflows) | **Verified Locally** (Vitest 4/4 suites pass, production build builds clean `dist/`) |
