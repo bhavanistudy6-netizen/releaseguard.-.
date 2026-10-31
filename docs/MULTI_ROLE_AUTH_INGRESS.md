@@ -163,3 +163,4 @@ Existing deployment and decision audit records created before the V8 migration f
 - Legacy records remain 100% intact with their original string identifiers preserved.
 - New actions executed by authenticated principals record both the readable formatted snapshot (e.g., `"Demo Deployer (deployer)"`) and the permanent database foreign key link to the user record.
 - Updating a user's display name does not alter or rewrite historical audit records.
+
