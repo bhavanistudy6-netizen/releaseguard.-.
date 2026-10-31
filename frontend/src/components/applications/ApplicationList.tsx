@@ -1,16 +1,20 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Application, PageResponse } from '../../types';
 import { api, ApiError } from '../../api/client';
-import { Plus, FolderGit2, Users, ExternalLink, ArrowRight, RefreshCw } from 'lucide-react';
+import { Plus, FolderGit2, Users, ExternalLink, ArrowRight, RefreshCw, Lock } from 'lucide-react';
 import { Pagination } from '../common/Pagination';
 import { AlertBanner } from '../common/AlertBanner';
 import { RegisterApplicationModal } from './RegisterApplicationModal';
+import { useAuth } from '../../context/AuthContext';
 
 interface ApplicationListProps {
   onSelectApplication: (app: Application) => void;
 }
 
 export const ApplicationList: React.FC<ApplicationListProps> = ({ onSelectApplication }) => {
+  const { can } = useAuth();
+  const canCreate = can('create-app');
+
   const [data, setData] = useState<PageResponse<Application>>({
     content: [],
     page: 0,
@@ -34,7 +38,7 @@ export const ApplicationList: React.FC<ApplicationListProps> = ({ onSelectApplic
       if (err instanceof ApiError) {
         setError(`[${err.status}] ${err.message}`);
       } else {
-        setError('Failed to load applications. Is the backend running on port 8080?');
+        setError('Failed to load applications. Is the backend running?');
       }
     } finally {
       setLoading(false);
@@ -65,10 +69,16 @@ export const ApplicationList: React.FC<ApplicationListProps> = ({ onSelectApplic
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
           </button>
           <button
-            onClick={() => setIsModalOpen(true)}
-            className="inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold shadow-sm transition shadow-emerald-600/20"
+            onClick={() => canCreate && setIsModalOpen(true)}
+            disabled={!canCreate}
+            title={canCreate ? 'Register Application' : 'Action restricted: Requires DEVELOPER or ADMIN role'}
+            className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-semibold shadow-sm transition ${
+              canCreate
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
+                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+            }`}
           >
-            <Plus className="w-4 h-4 mr-1.5" />
+            {canCreate ? <Plus className="w-4 h-4 mr-1.5" /> : <Lock className="w-4 h-4 mr-1.5" />}
             Register Application
           </button>
         </div>
@@ -89,10 +99,16 @@ export const ApplicationList: React.FC<ApplicationListProps> = ({ onSelectApplic
             Get started by registering an application with its repository and owner team.
           </p>
           <button
-            onClick={() => setIsModalOpen(true)}
-            className="mt-4 inline-flex items-center px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition"
+            onClick={() => canCreate && setIsModalOpen(true)}
+            disabled={!canCreate}
+            title={canCreate ? 'Register First Application' : 'Action restricted: Requires DEVELOPER or ADMIN role'}
+            className={`mt-4 inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition ${
+              canCreate
+                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+            }`}
           >
-            <Plus className="w-4 h-4 mr-1.5" />
+            {canCreate ? <Plus className="w-4 h-4 mr-1.5" /> : <Lock className="w-4 h-4 mr-1.5" />}
             Register First Application
           </button>
         </div>

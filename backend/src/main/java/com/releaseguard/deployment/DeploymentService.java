@@ -40,6 +40,18 @@ public class DeploymentService {
         public DeploymentResponse record(
                         Long applicationId,
                         @Valid RecordDeploymentRequest request) {
+                String deployedBy = (request.deployedBy() != null && !request.deployedBy().isBlank())
+                                ? request.deployedBy().strip()
+                                : "anonymous";
+                return record(applicationId, request, deployedBy, null);
+        }
+
+        @Transactional
+        public DeploymentResponse record(
+                        Long applicationId,
+                        @Valid RecordDeploymentRequest request,
+                        String deployedByName,
+                        Long deployedByUserId) {
 
                 // Lock an existing row before reading or creating the pointer.
                 applicationRepository.findByIdForUpdate(applicationId)
@@ -58,12 +70,19 @@ public class DeploymentService {
                         productionPolicy.check(release);
                 }
 
+                String resolvedDeployedBy = (deployedByName != null && !deployedByName.isBlank())
+                                ? deployedByName.strip()
+                                : (request.deployedBy() != null && !request.deployedBy().isBlank()
+                                                ? request.deployedBy().strip()
+                                                : "anonymous");
+
                 Deployment deployment = new Deployment(
                                 release,
                                 request.environment(),
-                                request.deployedBy().strip(),
+                                resolvedDeployedBy,
                                 request.deployedAt(),
-                                request.notes());
+                                request.notes(),
+                                deployedByUserId);
 
                 Deployment saved = deploymentRepository.saveAndFlush(deployment);
 

@@ -16,6 +16,7 @@ import { StatusBadge } from '../common/StatusBadge';
 import { AlertBanner } from '../common/AlertBanner';
 import { Pagination } from '../common/Pagination';
 import { Modal } from '../common/Modal';
+import { useAuth } from '../../context/AuthContext';
 import {
   ArrowLeft,
   CheckCircle,
@@ -38,6 +39,7 @@ export const ReleaseDetailView: React.FC<ReleaseDetailViewProps> = ({
   releaseId,
   onBack,
 }) => {
+  const { user, can } = useAuth();
   const [release, setRelease] = useState<Release | null>(null);
   const [loadingRelease, setLoadingRelease] = useState(true);
   const [releaseError, setReleaseError] = useState<string | null>(null);
@@ -92,7 +94,6 @@ export const ReleaseDetailView: React.FC<ReleaseDetailViewProps> = ({
   // Decision Modal State
   const [decisionModalOpen, setDecisionModalOpen] = useState(false);
   const [decisionAction, setDecisionAction] = useState<DecisionAction>('SUBMIT');
-  const [decisionActor, setDecisionActor] = useState('');
   const [decisionReason, setDecisionReason] = useState('');
   const [decisionImportId, setDecisionImportId] = useState<number | ''>('');
   const [submittingDecision, setSubmittingDecision] = useState(false);
@@ -285,7 +286,6 @@ export const ReleaseDetailView: React.FC<ReleaseDetailViewProps> = ({
   // Open Decision Modal
   const openDecisionModal = (action: DecisionAction) => {
     setDecisionAction(action);
-    setDecisionActor(application.ownerTeam);
     setDecisionReason('');
     setDecisionImportId(imports.length > 0 ? imports[0].id : '');
     setDecisionModalOpen(true);
@@ -294,8 +294,8 @@ export const ReleaseDetailView: React.FC<ReleaseDetailViewProps> = ({
   // Submit Decision
   const handleDecisionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!decisionActor.trim() || !decisionReason.trim()) {
-      setDecisionError('Actor and Reason are required.');
+    if (!decisionReason.trim()) {
+      setDecisionError('Reason is required.');
       return;
     }
 
@@ -311,7 +311,6 @@ export const ReleaseDetailView: React.FC<ReleaseDetailViewProps> = ({
 
       const payload: CreateDecisionRequest = {
         action: decisionAction,
-        actor: decisionActor.trim(),
         reason: decisionReason.trim(),
         vulnerabilityImportId:
           decisionAction === 'APPROVE' && decisionImportId ? Number(decisionImportId) : null,
@@ -396,48 +395,62 @@ export const ReleaseDetailView: React.FC<ReleaseDetailViewProps> = ({
           {/* Action Buttons depending on status */}
           <div className="flex flex-wrap items-center gap-2">
             {release.status === 'DRAFT' && (
-              <button
-                onClick={() => openDecisionModal('SUBMIT')}
-                className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-sm transition"
-              >
-                Submit for Review
-              </button>
+              can('submit-review') ? (
+                <button
+                  onClick={() => openDecisionModal('SUBMIT')}
+                  className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-sm transition"
+                >
+                  Submit for Review
+                </button>
+              ) : (
+                <span className="text-xs text-slate-400 italic">Submission requires DEVELOPER or ADMIN</span>
+              )
             )}
 
             {release.status === 'READY_FOR_REVIEW' && (
-              <>
-                <button
-                  onClick={() => openDecisionModal('APPROVE')}
-                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition inline-flex items-center"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 mr-1" />
-                  Approve Release
-                </button>
-                <button
-                  onClick={() => openDecisionModal('REJECT')}
-                  className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold shadow-sm transition"
-                >
-                  Reject to Draft
-                </button>
-              </>
+              can('approve-release') ? (
+                <>
+                  <button
+                    onClick={() => openDecisionModal('APPROVE')}
+                    className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition inline-flex items-center"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 mr-1" />
+                    Approve Release
+                  </button>
+                  <button
+                    onClick={() => openDecisionModal('REJECT')}
+                    className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold shadow-sm transition"
+                  >
+                    Reject to Draft
+                  </button>
+                </>
+              ) : (
+                <span className="text-xs text-slate-400 italic">Approval requires REVIEWER or ADMIN</span>
+              )
             )}
 
             {release.status === 'APPROVED' && (
-              <button
-                onClick={() => openDecisionModal('REVOKE')}
-                className="px-3.5 py-1.5 bg-amber-700 hover:bg-amber-800 text-white rounded-lg text-xs font-semibold shadow-sm transition"
-              >
-                Revoke Approval
-              </button>
+              can('approve-release') ? (
+                <button
+                  onClick={() => openDecisionModal('REVOKE')}
+                  className="px-3.5 py-1.5 bg-amber-700 hover:bg-amber-800 text-white rounded-lg text-xs font-semibold shadow-sm transition"
+                >
+                  Revoke Approval
+                </button>
+              ) : (
+                <span className="text-xs text-slate-400 italic">Revocation requires REVIEWER or ADMIN</span>
+              )
             )}
 
             {release.status !== 'RETIRED' && (
-              <button
-                onClick={() => openDecisionModal('RETIRE')}
-                className="px-3.5 py-1.5 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-xs font-semibold transition"
-              >
-                Retire Release
-              </button>
+              can('approve-release') && (
+                <button
+                  onClick={() => openDecisionModal('RETIRE')}
+                  className="px-3.5 py-1.5 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-xs font-semibold transition"
+                >
+                  Retire Release
+                </button>
+              )
             )}
           </div>
         </div>
@@ -589,7 +602,7 @@ export const ReleaseDetailView: React.FC<ReleaseDetailViewProps> = ({
                         <td className="px-4 py-3 font-mono text-[11px]">
                           {d.fromStatus} → {d.toStatus}
                         </td>
-                        <td className="px-4 py-3 font-medium text-slate-900">{d.actor}</td>
+                        <td className="px-4 py-3 font-medium text-slate-900">{d.actor}{d.legacyCallerSupplied && (<span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">legacy</span>)}</td>
                         <td className="px-4 py-3 max-w-xs truncate" title={d.reason}>
                           {d.reason}
                         </td>
@@ -636,17 +649,23 @@ export const ReleaseDetailView: React.FC<ReleaseDetailViewProps> = ({
                 </p>
               </div>
               <div>
-                <label className="inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold cursor-pointer shadow-sm transition">
-                  <Upload className="w-4 h-4 mr-1.5" />
-                  {uploadingSbom ? 'Uploading & Parsing...' : 'Upload CycloneDX SBOM'}
-                  <input
-                    type="file"
-                    accept=".json"
-                    className="hidden"
-                    disabled={uploadingSbom}
-                    onChange={handleSbomFileUpload}
-                  />
-                </label>
+                {can('upload-sbom') ? (
+                  <label className="inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold cursor-pointer shadow-sm transition">
+                    <Upload className="w-4 h-4 mr-1.5" />
+                    {uploadingSbom ? 'Uploading & Parsing...' : 'Upload CycloneDX SBOM'}
+                    <input
+                      type="file"
+                      accept=".json"
+                      className="hidden"
+                      disabled={uploadingSbom}
+                      onChange={handleSbomFileUpload}
+                    />
+                  </label>
+                ) : (
+                  <span className="inline-flex items-center px-4 py-2 bg-slate-100 text-slate-400 rounded-lg text-xs font-medium">
+                    SBOM upload restricted (Requires DEVELOPER or ADMIN)
+                  </span>
+                )}
               </div>
             </div>
           ) : (
@@ -781,17 +800,23 @@ export const ReleaseDetailView: React.FC<ReleaseDetailViewProps> = ({
             </div>
 
             <div>
-              <label className="inline-flex items-center px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold cursor-pointer shadow-sm transition">
-                <Upload className="w-3.5 h-3.5 mr-1.5" />
-                {uploadingVuln ? 'Importing Report...' : 'Import Vulnerability Report'}
-                <input
-                  type="file"
-                  accept=".json"
-                  className="hidden"
-                  disabled={uploadingVuln}
-                  onChange={handleVulnFileUpload}
-                />
-              </label>
+              {can('upload-vuln') ? (
+                <label className="inline-flex items-center px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold cursor-pointer shadow-sm transition">
+                  <Upload className="w-3.5 h-3.5 mr-1.5" />
+                  {uploadingVuln ? 'Importing Report...' : 'Import Vulnerability Report'}
+                  <input
+                    type="file"
+                    accept=".json"
+                    className="hidden"
+                    disabled={uploadingVuln}
+                    onChange={handleVulnFileUpload}
+                  />
+                </label>
+              ) : (
+                <span className="inline-flex items-center px-3 py-1.5 bg-slate-100 text-slate-400 rounded-lg text-xs font-medium">
+                  Scan report import restricted (Requires DEVELOPER or ADMIN)
+                </span>
+              )}
             </div>
           </div>
 
@@ -887,7 +912,7 @@ export const ReleaseDetailView: React.FC<ReleaseDetailViewProps> = ({
                         <td className="px-4 py-2.5 font-mono text-emerald-700 font-semibold">
                           {f.fixedVersion || '—'}
                         </td>
-                        <td className="px-4 py-2.5 max-w-sm truncate" title={f.description}>
+                        <td className="px-4 py-2.5 max-w-sm truncate" title={f.description || undefined}>
                           {f.description}
                         </td>
                         <td className="px-4 py-2.5 text-slate-700 font-medium">
@@ -921,16 +946,11 @@ export const ReleaseDetailView: React.FC<ReleaseDetailViewProps> = ({
         <form onSubmit={handleDecisionSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-              Actor *
+              Authenticated Actor
             </label>
-            <input
-              type="text"
-              required
-              value={decisionActor}
-              onChange={(e) => setDecisionActor(e.target.value)}
-              placeholder="e.g. Planner Team or Security Reviewer"
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-            />
+            <div className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm text-slate-800 font-medium">
+              {user?.displayName || user?.username} ({user?.username})
+            </div>
           </div>
 
           <div>

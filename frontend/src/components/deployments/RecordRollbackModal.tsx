@@ -4,6 +4,7 @@ import { Deployment, DeploymentEnvironment, RecordRollbackRequest } from '../../
 import { api, ApiError } from '../../api/client';
 import { AlertBanner } from '../common/AlertBanner';
 import { AlertTriangle, RotateCcw } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 interface RecordRollbackModalProps {
   isOpen: boolean;
@@ -26,13 +27,13 @@ export const RecordRollbackModal: React.FC<RecordRollbackModalProps> = ({
   onClose,
   onRecorded,
 }) => {
+  const { user } = useAuth();
   // Candidate targets are previous deployments in the same application & environment
   const candidates = historyDeployments.filter((d) => d.id !== currentDeployment.id);
 
   const [targetDeploymentId, setTargetDeploymentId] = useState<number | ''>(
     candidates.length > 0 ? candidates[0].id : ''
   );
-  const [deployedBy, setDeployedBy] = useState('');
   const [reason, setReason] = useState('');
   const [deployedAt, setDeployedAt] = useState(new Date().toISOString().slice(0, 16));
   const [loading, setLoading] = useState(false);
@@ -40,8 +41,8 @@ export const RecordRollbackModal: React.FC<RecordRollbackModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!targetDeploymentId || !deployedBy.trim() || !reason.trim()) {
-      setError('Target Deployment, Deployed By, and Reason are required.');
+    if (!targetDeploymentId || !reason.trim()) {
+      setError('Target Deployment and Reason are required.');
       return;
     }
 
@@ -53,7 +54,7 @@ export const RecordRollbackModal: React.FC<RecordRollbackModalProps> = ({
         environment,
         expectedCurrentDeploymentId: currentDeployment.id,
         targetDeploymentId: Number(targetDeploymentId),
-        deployedBy: deployedBy.trim(),
+        deployedBy: user?.username || undefined,
         deployedAt: new Date(deployedAt).toISOString(),
         reason: reason.trim(),
       };
@@ -154,16 +155,11 @@ export const RecordRollbackModal: React.FC<RecordRollbackModalProps> = ({
 
         <div>
           <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-            Deployed By (Actor) *
+            Authenticated Deployer
           </label>
-          <input
-            type="text"
-            required
-            value={deployedBy}
-            onChange={(e) => setDeployedBy(e.target.value)}
-            placeholder="e.g. Operations Team"
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-          />
+          <div className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm text-slate-800 font-medium">
+            {user?.displayName || user?.username} ({user?.username})
+          </div>
         </div>
 
         <div>

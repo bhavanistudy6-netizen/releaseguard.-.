@@ -185,7 +185,7 @@ export const DeployedFindingsModal: React.FC<DeployedFindingsModalProps> = ({
                       <td className="px-3 py-2 font-mono text-emerald-700">
                         {f.fixedVersion || '—'}
                       </td>
-                      <td className="px-3 py-2 max-w-xs truncate" title={f.description}>
+                      <td className="px-3 py-2 max-w-xs truncate" title={f.description || undefined}>
                         {f.description}
                       </td>
                       <td className="px-3 py-2 text-slate-700">{f.ownerTeam}</td>

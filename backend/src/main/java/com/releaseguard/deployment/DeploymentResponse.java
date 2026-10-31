@@ -15,7 +15,10 @@ public record DeploymentResponse(
         DeploymentType deploymentType,
         Long rollbackFromDeploymentId,
         Long rollbackTargetDeploymentId,
-        String rollbackReason) {
+        String rollbackReason,
+        Long deployedByUserId,
+        boolean legacyCallerSupplied) {
+
     // Retains compatibility with existing nine-argument callers.
     public DeploymentResponse(
             Long id,
@@ -27,7 +30,6 @@ public record DeploymentResponse(
             Instant deployedAt,
             Instant recordedAt,
             String notes) {
-
         this(
                 id,
                 applicationId,
@@ -41,12 +43,49 @@ public record DeploymentResponse(
                 DeploymentType.DEPLOY,
                 null,
                 null,
-                null);
+                null,
+                null,
+                true);
+    }
+
+    // Retains compatibility with existing 13-argument callers.
+    public DeploymentResponse(
+            Long id,
+            Long applicationId,
+            Long releaseId,
+            String releaseVersion,
+            DeploymentEnvironment environment,
+            String deployedBy,
+            Instant deployedAt,
+            Instant recordedAt,
+            String notes,
+            DeploymentType deploymentType,
+            Long rollbackFromDeploymentId,
+            Long rollbackTargetDeploymentId,
+            String rollbackReason) {
+        this(
+                id,
+                applicationId,
+                releaseId,
+                releaseVersion,
+                environment,
+                deployedBy,
+                deployedAt,
+                recordedAt,
+                notes,
+                deploymentType,
+                rollbackFromDeploymentId,
+                rollbackTargetDeploymentId,
+                rollbackReason,
+                null,
+                true);
     }
 
     public static DeploymentResponse from(Deployment deployment) {
         var from = deployment.getRollbackFromDeployment();
         var target = deployment.getRollbackTargetDeployment();
+        Long deployedByUserId = deployment.getDeployedByUserId();
+        boolean legacy = (deployedByUserId == null);
 
         return new DeploymentResponse(
                 deployment.getId(),
@@ -61,6 +100,8 @@ public record DeploymentResponse(
                 deployment.getDeploymentType(),
                 from == null ? null : from.getId(),
                 target == null ? null : target.getId(),
-                deployment.getRollbackReason());
+                deployment.getRollbackReason(),
+                deployedByUserId,
+                legacy);
     }
 }

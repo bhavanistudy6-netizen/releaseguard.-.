@@ -8,12 +8,14 @@ import { RegisterReleaseModal } from '../releases/RegisterReleaseModal';
 import { ReleaseDetailView } from '../releases/ReleaseDetailView';
 import { EnvironmentView } from '../deployments/EnvironmentView';
 import { ReleaseComparisonView } from '../comparison/ReleaseComparisonView';
+import { useAuth } from '../../context/AuthContext';
 import {
   ArrowLeft,
   ArrowRight,
   ExternalLink,
   FolderGit2,
   GitCompare,
+  Lock,
   Package,
   Plus,
   RefreshCw,
@@ -32,6 +34,9 @@ export const ApplicationDetailView: React.FC<ApplicationDetailViewProps> = ({
   onBack,
   applications,
 }) => {
+  const { can } = useAuth();
+  const canCreateRelease = can('create-release');
+
   const [activeTab, setActiveTab] = useState<'releases' | 'deployments' | 'compare'>('releases');
   const [releasesData, setReleasesData] = useState<PageResponse<Release>>({
     content: [],
@@ -121,10 +126,16 @@ export const ApplicationDetailView: React.FC<ApplicationDetailViewProps> = ({
 
           <div className="flex items-center space-x-2">
             <button
-              onClick={() => setRegisterReleaseModalOpen(true)}
-              className="inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold shadow-sm transition shadow-emerald-600/20"
+              onClick={() => canCreateRelease && setRegisterReleaseModalOpen(true)}
+              disabled={!canCreateRelease}
+              title={canCreateRelease ? 'Register Release' : 'Action restricted: Requires DEVELOPER or ADMIN role'}
+              className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-semibold shadow-sm transition ${
+                canCreateRelease
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
+                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+              }`}
             >
-              <Plus className="w-4 h-4 mr-1.5" />
+              {canCreateRelease ? <Plus className="w-4 h-4 mr-1.5" /> : <Lock className="w-4 h-4 mr-1.5" />}
               Register Release
             </button>
           </div>
@@ -206,10 +217,16 @@ export const ApplicationDetailView: React.FC<ApplicationDetailViewProps> = ({
                 Register a release version (e.g. v1.0.0) with git commit SHA and docker image.
               </p>
               <button
-                onClick={() => setRegisterReleaseModalOpen(true)}
-                className="mt-4 inline-flex items-center px-4 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 transition"
+                onClick={() => canCreateRelease && setRegisterReleaseModalOpen(true)}
+                disabled={!canCreateRelease}
+                title={canCreateRelease ? 'Register First Release' : 'Action restricted: Requires DEVELOPER or ADMIN role'}
+                className={`mt-4 inline-flex items-center px-4 py-2 text-xs font-semibold rounded-lg transition ${
+                  canCreateRelease
+                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                }`}
               >
-                <Plus className="w-4 h-4 mr-1.5" />
+                {canCreateRelease ? <Plus className="w-4 h-4 mr-1.5" /> : <Lock className="w-4 h-4 mr-1.5" />}
                 Register First Release
               </button>
             </div>

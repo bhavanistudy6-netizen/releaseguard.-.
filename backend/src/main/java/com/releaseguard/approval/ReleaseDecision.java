@@ -35,6 +35,9 @@ public class ReleaseDecision {
     @Column(nullable = false, length = 150)
     private String actor;
 
+    @Column(name = "actor_user_id")
+    private Long actorUserId;
+
     @Column(nullable = false, columnDefinition = "TEXT")
     private String reason;
 
@@ -64,6 +67,19 @@ public class ReleaseDecision {
             String reason,
             VulnerabilityImport vulnerabilityImport,
             String policyVersion) {
+        this(release, action, fromStatus, toStatus, actor, reason, vulnerabilityImport, policyVersion, null);
+    }
+
+    public ReleaseDecision(
+            Release release,
+            ReleaseDecisionAction action,
+            ReleaseStatus fromStatus,
+            ReleaseStatus toStatus,
+            String actor,
+            String reason,
+            VulnerabilityImport vulnerabilityImport,
+            String policyVersion,
+            Long actorUserId) {
         this.release = release;
         this.action = action;
         this.fromStatus = fromStatus;
@@ -75,6 +91,7 @@ public class ReleaseDecision {
                 ? null
                 : vulnerabilityImport.getSbomDocument();
         this.policyVersion = policyVersion;
+        this.actorUserId = actorUserId;
     }
 
     @PrePersist
@@ -104,6 +121,10 @@ public class ReleaseDecision {
 
     public String getActor() {
         return actor;
+    }
+
+    public Long getActorUserId() {
+        return actorUserId;
     }
 
     public String getReason() {

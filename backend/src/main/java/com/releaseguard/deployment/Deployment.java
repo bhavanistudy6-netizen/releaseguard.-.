@@ -29,6 +29,9 @@ public class Deployment {
     @Column(name = "deployed_by", nullable = false, length = 150)
     private String deployedBy;
 
+    @Column(name = "deployed_by_user_id")
+    private Long deployedByUserId;
+
     @Column(name = "deployed_at", nullable = false)
     private Instant deployedAt;
 
@@ -62,12 +65,23 @@ public class Deployment {
             String deployedBy,
             Instant deployedAt,
             String notes) {
+        this(release, environment, deployedBy, deployedAt, notes, null);
+    }
+
+    public Deployment(
+            Release release,
+            DeploymentEnvironment environment,
+            String deployedBy,
+            Instant deployedAt,
+            String notes,
+            Long deployedByUserId) {
         this.application = release.getApplication();
         this.release = release;
         this.environment = environment;
         this.deployedBy = deployedBy;
         this.deployedAt = deployedAt;
         this.notes = notes;
+        this.deployedByUserId = deployedByUserId;
     }
 
     @PrePersist
@@ -95,6 +109,14 @@ public class Deployment {
         return deployedBy;
     }
 
+    public Long getDeployedByUserId() {
+        return deployedByUserId;
+    }
+
+    public void setDeployedByUserId(Long deployedByUserId) {
+        this.deployedByUserId = deployedByUserId;
+    }
+
     public Instant getDeployedAt() {
         return deployedAt;
     }
@@ -105,41 +127,6 @@ public class Deployment {
 
     public String getNotes() {
         return notes;
-    }
-
-    public static Deployment rollback(
-            Deployment from,
-            Deployment target,
-            String deployedBy,
-            Instant deployedAt,
-            String reason) {
-
-        if (!from.getApplication().getId().equals(
-                target.getApplication().getId())
-                || from.getEnvironment() != target.getEnvironment()) {
-
-            throw new IllegalArgumentException(
-                    "Rollback deployments must belong to the same application and environment");
-        }
-
-        if (target.getId() >= from.getId()) {
-            throw new IllegalArgumentException(
-                    "Rollback target must precede the current deployment");
-        }
-
-        Deployment deployment = new Deployment(
-                target.getRelease(),
-                target.getEnvironment(),
-                deployedBy,
-                deployedAt,
-                null);
-
-        deployment.deploymentType = DeploymentType.ROLLBACK;
-        deployment.rollbackFromDeployment = from;
-        deployment.rollbackTargetDeployment = target;
-        deployment.rollbackReason = reason;
-
-        return deployment;
     }
 
     public DeploymentType getDeploymentType() {
@@ -156,5 +143,43 @@ public class Deployment {
 
     public String getRollbackReason() {
         return rollbackReason;
+    }
+
+    public static Deployment rollback(
+            Deployment from,
+            Deployment target,
+            String deployedBy,
+            Instant deployedAt,
+            String reason) {
+        return rollback(from, target, deployedBy, deployedAt, reason, null);
+    }
+
+    public static Deployment rollback(
+            Deployment from,
+            Deployment target,
+            String deployedBy,
+            Instant deployedAt,
+            String reason,
+            Long deployedByUserId) {
+
+        if (!from.getApplication().getId().equals(
+                target.getApplication().getId())
+                || from.getEnvironment() != target.getEnvironment()) {
+            throw new IllegalArgumentException(
+                    "Rollback deployments must belong to the same application and environment");
+        }
+
+        Deployment deployment = new Deployment();
+        deployment.application = from.getApplication();
+        deployment.release = target.getRelease();
+        deployment.environment = from.getEnvironment();
+        deployment.deployedBy = deployedBy;
+        deployment.deployedAt = deployedAt;
+        deployment.deploymentType = DeploymentType.ROLLBACK;
+        deployment.rollbackFromDeployment = from;
+        deployment.rollbackTargetDeployment = target;
+        deployment.rollbackReason = reason;
+        deployment.deployedByUserId = deployedByUserId;
+        return deployment;
     }
 }

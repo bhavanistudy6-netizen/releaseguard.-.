@@ -20,7 +20,6 @@ public record RecordRollbackRequest(
         @Positive
         Long targetDeploymentId,
 
-        @NotBlank
         @Size(max = 150)
         String deployedBy,
 

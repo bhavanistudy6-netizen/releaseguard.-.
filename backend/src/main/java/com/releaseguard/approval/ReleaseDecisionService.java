@@ -52,6 +52,19 @@ public class ReleaseDecisionService {
             Long applicationId,
             Long releaseId,
             @Valid ReleaseDecisionRequest request) {
+        String actor = (request.actor() != null && !request.actor().isBlank())
+                ? request.actor().strip()
+                : "anonymous";
+        return decide(applicationId, releaseId, request, actor, null);
+    }
+
+    @Transactional
+    public ReleaseDecisionResponse decide(
+            Long applicationId,
+            Long releaseId,
+            @Valid ReleaseDecisionRequest request,
+            String actorName,
+            Long actorUserId) {
 
         applicationRepository.findByIdForUpdate(applicationId)
                 .orElseThrow(() -> error(
@@ -94,15 +107,20 @@ public class ReleaseDecisionService {
 
         releaseRepository.saveAndFlush(release);
 
+        String resolvedActor = (actorName != null && !actorName.isBlank())
+                ? actorName.strip()
+                : (request.actor() != null && !request.actor().isBlank() ? request.actor().strip() : "anonymous");
+
         ReleaseDecision decision = new ReleaseDecision(
                 release,
                 request.action(),
                 fromStatus,
                 release.getStatus(),
-                request.actor().strip(),
+                resolvedActor,
                 request.reason().strip(),
                 evidence,
-                policyVersion);
+                policyVersion,
+                actorUserId);
 
         return ReleaseDecisionResponse.from(
                 decisionRepository.saveAndFlush(decision));

@@ -36,6 +36,18 @@ public class RollbackService {
     public RollbackResponse record(
             Long applicationId,
             @Valid RecordRollbackRequest request) {
+        String deployedBy = (request.deployedBy() != null && !request.deployedBy().isBlank())
+                ? request.deployedBy().strip()
+                : "anonymous";
+        return record(applicationId, request, deployedBy, null);
+    }
+
+    @Transactional
+    public RollbackResponse record(
+            Long applicationId,
+            @Valid RecordRollbackRequest request,
+            String deployedByName,
+            Long deployedByUserId) {
 
         applicationRepository.findByIdForUpdate(applicationId)
                 .orElseThrow(() -> error(
@@ -83,12 +95,19 @@ public class RollbackService {
             productionPolicy.check(target.getRelease());
         }
 
+        String resolvedDeployedBy = (deployedByName != null && !deployedByName.isBlank())
+                ? deployedByName.strip()
+                : (request.deployedBy() != null && !request.deployedBy().isBlank()
+                        ? request.deployedBy().strip()
+                        : "anonymous");
+
         Deployment rollback = Deployment.rollback(
                 from,
                 target,
-                request.deployedBy().strip(),
+                resolvedDeployedBy,
                 request.deployedAt(),
-                request.reason().strip());
+                request.reason().strip(),
+                deployedByUserId);
 
         Deployment saved = deploymentRepository.saveAndFlush(rollback);
 

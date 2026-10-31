@@ -13,7 +13,9 @@ import { Pagination } from '../common/Pagination';
 import { RecordDeploymentModal } from './RecordDeploymentModal';
 import { RecordRollbackModal } from './RecordRollbackModal';
 import { DeployedFindingsModal } from './DeployedFindingsModal';
+import { useAuth } from '../../context/AuthContext';
 import {
+  Lock,
   Plus,
   RefreshCw,
   RotateCcw,
@@ -30,6 +32,10 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({
   application,
   releases,
 }) => {
+  const { can } = useAuth();
+  const canDeploy = can('deploy');
+  const canRollback = can('rollback');
+
   const [selectedEnv, setSelectedEnv] = useState<DeploymentEnvironment>('STAGING');
 
   // Current deployment per environment
@@ -134,10 +140,16 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
           </button>
           <button
-            onClick={() => setDeployModalOpen(true)}
-            className="inline-flex items-center px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition"
+            onClick={() => canDeploy && setDeployModalOpen(true)}
+            disabled={!canDeploy}
+            title={canDeploy ? 'Record Deployment' : 'Action restricted: Requires DEPLOYER or ADMIN role'}
+            className={`inline-flex items-center px-3.5 py-2 rounded-lg text-xs font-semibold shadow-sm transition ${
+              canDeploy
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+            }`}
           >
-            <Plus className="w-4 h-4 mr-1.5" />
+            {canDeploy ? <Plus className="w-4 h-4 mr-1.5" /> : <Lock className="w-4 h-4 mr-1.5" />}
             Record Deployment
           </button>
         </div>
@@ -238,8 +250,14 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({
                   Deployed Findings
                 </button>
                 <button
-                  onClick={() => setRollbackModalOpen(true)}
-                  className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-semibold transition inline-flex items-center"
+                  onClick={() => canRollback && setRollbackModalOpen(true)}
+                  disabled={!canRollback}
+                  title={canRollback ? 'Record Rollback' : 'Action restricted: Requires DEPLOYER or ADMIN role'}
+                  className={`px-3 py-1.5 border rounded-lg text-xs font-semibold transition inline-flex items-center ${
+                    canRollback
+                      ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300'
+                      : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                  }`}
                 >
                   <RotateCcw className="w-3.5 h-3.5 mr-1" />
                   Record Rollback
@@ -292,6 +310,11 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({
                     </td>
                     <td className="px-4 py-2.5 text-slate-800 font-medium">
                       {d.deployedBy}
+                      {d.legacyCallerSupplied && (
+                        <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                          legacy
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 whitespace-nowrap text-slate-500 font-mono">
                       {new Date(d.deployedAt).toLocaleString()}

@@ -14,9 +14,41 @@ public record ReleaseDecisionResponse(
         String reason,
         Long vulnerabilityImportId,
         String policyVersion,
-        Instant decidedAt) {
+        Instant decidedAt,
+        Long actorUserId,
+        boolean legacyCallerSupplied) {
+
+    public ReleaseDecisionResponse(
+            Long id,
+            Long releaseId,
+            ReleaseDecisionAction action,
+            ReleaseStatus fromStatus,
+            ReleaseStatus toStatus,
+            String actor,
+            String reason,
+            Long vulnerabilityImportId,
+            String policyVersion,
+            Instant decidedAt) {
+        this(
+                id,
+                releaseId,
+                action,
+                fromStatus,
+                toStatus,
+                actor,
+                reason,
+                vulnerabilityImportId,
+                policyVersion,
+                decidedAt,
+                null,
+                true
+        );
+    }
+
     public static ReleaseDecisionResponse from(ReleaseDecision decision) {
         var scan = decision.getVulnerabilityImport();
+        Long actorUserId = decision.getActorUserId();
+        boolean legacy = (actorUserId == null);
 
         return new ReleaseDecisionResponse(
                 decision.getId(),
@@ -28,6 +60,8 @@ public record ReleaseDecisionResponse(
                 decision.getReason(),
                 scan == null ? null : scan.getId(),
                 decision.getPolicyVersion(),
-                decision.getDecidedAt());
+                decision.getDecidedAt(),
+                actorUserId,
+                legacy);
     }
 }

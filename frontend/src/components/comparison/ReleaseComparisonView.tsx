@@ -109,15 +109,54 @@ export const ReleaseComparisonView: React.FC<ReleaseComparisonViewProps> = ({
     }
   };
 
+  const formatIdentity = (identity: unknown): string => {
+    if (!identity) return '—';
+    if (typeof identity === 'string') return identity;
+    if (typeof identity === 'object' && identity !== null) {
+      const obj = identity as { namespace?: string; name?: string };
+      const ns = obj.namespace ? `${obj.namespace}/` : '';
+      const name = obj.name || '';
+      return `${ns}${name}`;
+    }
+    return String(identity);
+  };
+
+  const formatVersions = (target: unknown): string => {
+    if (!target) return '—';
+    if (Array.isArray(target)) {
+      if (target.length === 0) return '—';
+      return target.map((x) => (typeof x === 'object' && x ? x.version || 'unknown' : String(x))).join(', ');
+    }
+    if (typeof target === 'object' && target !== null && 'version' in target) {
+      return (target as { version?: string }).version || '—';
+    }
+    return String(target);
+  };
+
+  const formatComponentType = (c: { identity?: unknown; before?: unknown; after?: unknown }): string => {
+    if (typeof c.identity === 'object' && c.identity !== null && 'type' in c.identity) {
+      return (c.identity as { type: string }).type;
+    }
+    const extractType = (t: unknown): string | undefined => {
+      if (Array.isArray(t) && t[0] && typeof t[0] === 'object' && 'componentType' in t[0]) {
+        return (t[0] as { componentType?: string }).componentType;
+      }
+      if (typeof t === 'object' && t !== null && 'componentType' in t) {
+        return (t as { componentType?: string }).componentType;
+      }
+      return undefined;
+    };
+    return extractType(c.after) || extractType(c.before) || 'LIBRARY';
+  };
+
   const filteredChanges = comparison
     ? comparison.changes.filter((c) => {
         if (filterType !== 'ALL' && c.changeType !== filterType) return false;
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
-          const matchName = c.identity.name.toLowerCase().includes(q);
-          const matchNamespace = c.identity.namespace?.toLowerCase().includes(q) || false;
-          const matchType = c.identity.type.toLowerCase().includes(q);
-          return matchName || matchNamespace || matchType;
+          const matchIdentity = formatIdentity(c.identity).toLowerCase().includes(q);
+          const matchReason = c.reason?.toLowerCase().includes(q) || false;
+          return matchIdentity || matchReason;
         }
         return true;
       })
@@ -309,25 +348,16 @@ export const ReleaseComparisonView: React.FC<ReleaseComparisonViewProps> = ({
                           <StatusBadge changeType={c.changeType} size="sm" />
                         </td>
                         <td className="px-4 py-2.5 font-bold font-mono text-slate-900">
-                          {c.identity.namespace ? `${c.identity.namespace}/` : ''}
-                          {c.identity.name}
+                          {formatIdentity(c.identity)}
                         </td>
                         <td className="px-4 py-2.5 uppercase text-[10px] text-slate-500 font-mono">
-                          {c.identity.type}
+                          {formatComponentType(c)}
                         </td>
                         <td className="px-4 py-2.5 font-mono text-slate-700">
-                          {c.before ? (
-                            <span>{c.before.version || 'unknown'}</span>
-                          ) : (
-                            <span className="text-slate-400 italic font-sans">—</span>
-                          )}
+                          {formatVersions(c.before)}
                         </td>
                         <td className="px-4 py-2.5 font-mono text-slate-900 font-semibold">
-                          {c.after ? (
-                            <span>{c.after.version || 'unknown'}</span>
-                          ) : (
-                            <span className="text-slate-400 italic font-sans">—</span>
-                          )}
+                          {formatVersions(c.after)}
                         </td>
                         <td className="px-4 py-2.5 text-xs font-sans text-slate-500 max-w-sm truncate" title={c.reason || ''}>
                           {c.reason ? (

@@ -10,7 +10,7 @@ public record RecordDeploymentRequest(
 
         @NotNull DeploymentEnvironment environment,
 
-        @NotBlank @Size(max = 150) String deployedBy,
+        @Size(max = 150) String deployedBy,
 
         @NotNull @PastOrPresent Instant deployedAt,
 

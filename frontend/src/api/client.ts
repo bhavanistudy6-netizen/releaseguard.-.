@@ -3,6 +3,7 @@ import {
   CreateApplicationRequest,
   CreateDecisionRequest,
   CreateReleaseRequest,
+  CreateUserRequest,
   Deployment,
   DeploymentEnvironment,
   PageResponse,
@@ -11,9 +12,12 @@ import {
   Release,
   ReleaseComparisonResponse,
   ReleaseDecision,
+  ResetPasswordRequest,
   RollbackResponse,
   SbomComponent,
   SbomDocument,
+  UpdateUserRequest,
+  User,
   VulnerabilityFinding,
   VulnerabilityImport,
 } from '../types';
@@ -30,14 +34,55 @@ export class ApiError extends Error {
   }
 }
 
+function getCsrfTokenFromCookie(): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+let cachedCsrfToken: string | null = null;
+
+export async function fetchCsrfToken(): Promise<string | null> {
+  try {
+    const res = await fetch('/api/v1/auth/csrf', {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      cachedCsrfToken = data.token;
+      return data.token;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const method = (options?.method || 'GET').toUpperCase();
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    ...(options?.headers as Record<string, string>),
+  };
+
+  // Attach CSRF token on state-changing browser requests
+  if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+    let csrfToken = getCsrfTokenFromCookie() || cachedCsrfToken;
+    if (!csrfToken) {
+      csrfToken = await fetchCsrfToken();
+    }
+    if (csrfToken) {
+      headers['X-XSRF-TOKEN'] = csrfToken;
+    }
+  }
+
   const response = await fetch(url, {
+    credentials: 'same-origin',
     ...options,
-    headers: {
-      Accept: 'application/json',
-      ...options?.headers,
-    },
+    headers,
   });
 
   if (!response.ok) {
@@ -61,6 +106,11 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
     } catch {
       // ignore parsing failure and keep default status error
     }
+
+    if (response.status === 401 && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('releaseguard:unauthorized'));
+    }
+
     throw new ApiError(response.status, errorMessage, details);
   }
 
@@ -73,6 +123,75 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  // Authentication
+  async login(username: string, password: string): Promise<User> {
+    const user = await request<User>('/api/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    // refresh CSRF cookie after login session rotation
+    void fetchCsrfToken();
+    return user;
+  },
+
+  async logout(): Promise<void> {
+    try {
+      await request<{ message: string }>('/api/v1/auth/logout', {
+        method: 'POST',
+      });
+    } finally {
+      cachedCsrfToken = null;
+    }
+  },
+
+  async getCurrentUser(): Promise<User> {
+    return request<User>('/api/v1/auth/me');
+  },
+
+  async getCsrf(): Promise<{ token: string; parameterName: string; headerName: string }> {
+    return request<{ token: string; parameterName: string; headerName: string }>('/api/v1/auth/csrf');
+  },
+
+  // Admin User Management
+  async getUsers(page = 0, size = 20): Promise<PageResponse<User>> {
+    return request<PageResponse<User>>(`/api/v1/admin/users?page=${page}&size=${size}`);
+  },
+
+  async getUser(id: number): Promise<User> {
+    return request<User>(`/api/v1/admin/users/${id}`);
+  },
+
+  async createUser(data: CreateUserRequest): Promise<User> {
+    return request<User>('/api/v1/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateUser(id: number, data: UpdateUserRequest): Promise<User> {
+    return request<User>(`/api/v1/admin/users/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+
+  async resetUserPassword(id: number, data: ResetPasswordRequest): Promise<void> {
+    return request<void>(`/api/v1/admin/users/${id}/password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteUser(id: number): Promise<void> {
+    return request<void>(`/api/v1/admin/users/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
   // Applications
   async getApplications(page = 0, size = 10): Promise<PageResponse<Application>> {
     return request<PageResponse<Application>>(`/api/v1/applications?page=${page}&size=${size}`);

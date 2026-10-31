@@ -5,6 +5,18 @@ import App from './App';
 // Mock API client
 vi.mock('./api/client', () => ({
   api: {
+    getCurrentUser: vi.fn().mockResolvedValue({
+      id: 1,
+      username: 'admin',
+      displayName: 'System Admin',
+      roles: ['ADMIN'],
+      enabled: true,
+    }),
+    getCsrf: vi.fn().mockResolvedValue({
+      token: 'test-token',
+      headerName: 'X-XSRF-TOKEN',
+      parameterName: '_csrf',
+    }),
     getApplications: vi.fn().mockResolvedValue({
       content: [
         {
@@ -41,10 +53,13 @@ vi.mock('./api/client', () => ({
 }));
 
 describe('App', () => {
-  it('renders header, navigation and applications view', async () => {
+  it('renders header, navigation and applications view for authenticated user', async () => {
     render(<App />);
 
-    expect(screen.getByText('ReleaseGuard')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('ReleaseGuard')).toBeInTheDocument();
+    });
+
     expect(screen.getByText('Governance Boundary:')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Applications/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Environments/i })).toBeInTheDocument();

@@ -6,6 +6,36 @@ export interface PageResponse<T> {
   totalPages: number;
 }
 
+export type Role = 'VIEWER' | 'DEVELOPER' | 'REVIEWER' | 'DEPLOYER' | 'ADMIN';
+
+export interface User {
+  id: number;
+  username: string;
+  displayName: string;
+  fullName?: string;
+  roles: Role[];
+  enabled: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateUserRequest {
+  username: string;
+  password: string;
+  displayName: string;
+  roles: Role[];
+}
+
+export interface UpdateUserRequest {
+  displayName: string;
+  roles: Role[];
+  enabled: boolean;
+}
+
+export interface ResetPasswordRequest {
+  newPassword: string;
+}
+
 export interface Application {
   id: number;
   name: string;
@@ -58,35 +88,33 @@ export interface SbomDocument {
 
 export interface SbomComponent {
   id: number;
-  bomRef: string | null;
-  componentType: string;
-  groupName: string | null;
+  bomRef: string;
+  group?: string | null;
+  groupName?: string | null;
   name: string;
-  version: string | null;
+  version: string;
+  componentType?: string;
   purl: string | null;
+  scope?: string | null;
 }
 
-export type ChangeType = 'ADDED' | 'REMOVED' | 'UNCHANGED' | 'VERSION_CHANGED' | 'UNCERTAIN';
+export type ChangeType = 'ADDED' | 'REMOVED' | 'VERSION_CHANGED' | 'UNCHANGED' | 'UNCERTAIN';
 
-export interface ComponentIdentity {
-  type: string;
-  namespace: string | null;
+export interface DependencySnapshot {
+  componentId?: number;
+  componentType?: string;
+  groupName?: string | null;
   name: string;
-  subpath: string | null;
-  qualifiers: Record<string, string>;
-}
-
-export interface ComponentVersionSnapshot {
-  bomRef: string | null;
-  version: string | null;
+  version: string;
+  group?: string | null;
   purl: string | null;
 }
 
 export interface DependencyChange {
-  identity: ComponentIdentity;
+  identity: string;
   changeType: ChangeType;
-  before: ComponentVersionSnapshot | null;
-  after: ComponentVersionSnapshot | null;
+  before: DependencySnapshot[];
+  after: DependencySnapshot[];
   reason: string | null;
 }
 
@@ -97,25 +125,7 @@ export interface ReleaseComparisonResponse {
   changes: DependencyChange[];
 }
 
-export type VulnerabilitySeverity =
-  | 'CRITICAL'
-  | 'HIGH'
-  | 'MEDIUM'
-  | 'LOW'
-  | 'INFORMATIONAL'
-  | 'UNKNOWN';
-
-export interface VulnerabilityImport {
-  id: number;
-  releaseId: number;
-  sbomDocumentId: number;
-  scannerName: string;
-  scannerVersion: string;
-  documentSha256: string;
-  findingCount: number;
-  scannedAt: string;
-  importedAt: string;
-}
+export type VulnerabilitySeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFORMATIONAL' | 'UNKNOWN';
 
 export interface VulnerabilityFinding {
   id: number;
@@ -127,13 +137,25 @@ export interface VulnerabilityFinding {
   releaseVersion: string;
   componentId: number;
   componentName: string;
-  componentVersion: string | null;
+  componentVersion: string;
   purl: string | null;
   vulnerabilityId: string;
   source: string;
   severity: VulnerabilitySeverity;
-  description: string;
+  description: string | null;
   fixedVersion: string | null;
+}
+
+export interface VulnerabilityImport {
+  id: number;
+  releaseId: number;
+  sbomDocumentId: number;
+  scannerName: string;
+  scannerVersion: string;
+  documentSha256: string;
+  findingCount: number;
+  scannedAt: string;
+  importedAt: string;
 }
 
 export type DeploymentEnvironment = 'DEVELOPMENT' | 'STAGING' | 'PRODUCTION';
@@ -153,12 +175,14 @@ export interface Deployment {
   rollbackFromDeploymentId: number | null;
   rollbackTargetDeploymentId: number | null;
   rollbackReason: string | null;
+  deployedByUserId?: number | null;
+  legacyCallerSupplied?: boolean;
 }
 
 export interface RecordDeploymentRequest {
   releaseId: number;
   environment: DeploymentEnvironment;
-  deployedBy: string;
+  deployedBy?: string;
   deployedAt: string;
   notes?: string;
 }
@@ -167,7 +191,7 @@ export interface RecordRollbackRequest {
   environment: DeploymentEnvironment;
   expectedCurrentDeploymentId: number;
   targetDeploymentId: number;
-  deployedBy: string;
+  deployedBy?: string;
   deployedAt: string;
   reason: string;
 }
@@ -193,11 +217,13 @@ export interface ReleaseDecision {
   vulnerabilityImportId: number | null;
   policyVersion: string | null;
   decidedAt: string;
+  actorUserId?: number | null;
+  legacyCallerSupplied?: boolean;
 }
 
 export interface CreateDecisionRequest {
   action: DecisionAction;
-  actor: string;
+  actor?: string;
   reason: string;
   vulnerabilityImportId?: number | null;
 }
