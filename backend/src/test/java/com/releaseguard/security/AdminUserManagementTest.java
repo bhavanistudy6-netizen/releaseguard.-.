@@ -19,6 +19,7 @@ class AdminUserManagementTest extends BaseIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
+
     @Test
     @WithMockUser(username = "developer", roles = {"DEVELOPER"})
     @DisplayName("Non-admin caller cannot access admin user management (403 Forbidden)")
